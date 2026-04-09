@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: Backend — lint, typecheck, test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER:     bolster
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB:       bolster_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports: ['5432:5432']
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports: ['6379:6379']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci --workspace=backend
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+        working-directory: backend
+
+      - name: Lint
+        run: npm run lint --workspace=backend
+
+      - name: Test
+        run: npm test --workspace=backend
+        env:
+          NODE_ENV:              test
+          DATABASE_URL:          postgresql://bolster:testpassword@localhost:5432/bolster_test
+          REDIS_URL:             redis://localhost:6379
+          JWT_ACCESS_SECRET:     test-access-secret-must-be-32-characters
+          JWT_REFRESH_SECRET:    test-refresh-secret-must-be-32-characters
+          TRUELAYER_CLIENT_ID:   test-client-id
+          TRUELAYER_CLIENT_SECRET: test-client-secret
+          TRUELAYER_REDIRECT_URI: http://localhost:3000/callback
+          TRUELAYER_WEBHOOK_SECRET: test-webhook-secret
+          TRUELAYER_AUTH_URL:    https://auth.truelayer-sandbox.com
+          TRUELAYER_API_URL:     https://api.truelayer-sandbox.com
+          ONFIDO_API_TOKEN:      test-onfido-token
+          ONFIDO_WEBHOOK_TOKEN:  test-onfido-webhook
+          COMPLY_ADVANTAGE_API_KEY: test-ca-key
+          SENDGRID_API_KEY:      test-sg-key
+          SENDGRID_FROM_EMAIL:   test@bolster.io
+          TWILIO_ACCOUNT_SID:    test-twilio-sid
+          TWILIO_AUTH_TOKEN:     test-twilio-token
+          TWILIO_FROM_NUMBER:    '+441234567890'
+          APP_URL:               http://localhost:3000
+          API_URL:               http://localhost:3001
+          INVITE_BASE_URL:       http://localhost:3000/invite
+          INVITE_SECRET:         test-invite-secret-must-be-32-characters
+
+  frontend:
+    name: Frontend — lint, typecheck
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci --workspace=frontend
+
+      - name: TypeScript check
+        run: npx tsc --noEmit
+        working-directory: frontend
+
+      - name: Lint
+        run: npm run lint --workspace=frontend

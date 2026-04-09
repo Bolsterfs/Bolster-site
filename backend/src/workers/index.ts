@@ -1,0 +1,124 @@
+import { Worker, Queue, type Job } from 'bullmq'
+import IORedis from 'ioredis'
+import { env } from '../config/env.js'
+import { paymentService } from '../services/payment/payment.service.js'
+
+// ── Redis connection for BullMQ ────────────────────────────────────────────────
+const connection = new IORedis(env.REDIS_URL, {
+  maxRetriesPerRequest: null, // required by BullMQ
+})
+
+// ── Queue definitions ─────────────────────────────────────────────────────────
+
+export const paymentQueue = new Queue('payments', {
+  connection,
+  defaultJobOptions: {
+    attempts:  3,
+    backoff: {
+      type:  'exponential',
+      delay: 2000, // 2s, 4s, 8s
+    },
+    removeOnComplete: { count: 100 },
+    removeOnFail:     { count: 500 },
+  },
+})
+
+export const notificationQueue = new Queue('notifications', {
+  connection,
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 1000 },
+    removeOnComplete: { count: 50 },
+    removeOnFail:     { count: 200 },
+  },
+})
+
+// ── Job type definitions ──────────────────────────────────────────────────────
+
+export interface PaymentSettledJob {
+  type:              'payment_settled'
+  truelayerPaymentId: string
+}
+
+export interface PaymentFailedJob {
+  type:       'payment_failed'
+  paymentId:  string
+  reason?:    string
+}
+
+export interface SendEmailJob {
+  type:      'send_email'
+  to:        string
+  template:  'payment_confirmation' | 'payment_failed' | 'kyc_approved' | 'invite_created'
+  data:      Record<string, unknown>
+}
+
+export type PaymentJobData     = PaymentSettledJob | PaymentFailedJob
+export type NotificationJobData = SendEmailJob
+
+// ── Payment worker ────────────────────────────────────────────────────────────
+
+export const paymentWorker = new Worker<PaymentJobData>(
+  'payments',
+  async (job: Job<PaymentJobData>) => {
+    const { data } = job
+
+    switch (data.type) {
+      case 'payment_settled':
+        await paymentService.handlePaymentSettled(data.truelayerPaymentId)
+        break
+
+      case 'payment_failed':
+        console.warn(`Payment failed: ${data.paymentId}`, { reason: data.reason })
+        // Add notification to queue
+        await notificationQueue.add('send_email', {
+          type:     'send_email',
+          to:       'recipient@example.com', // fetch from payment record
+          template: 'payment_failed',
+          data:     { paymentId: data.paymentId },
+        } satisfies SendEmailJob)
+        break
+
+      default:
+        console.warn('Unknown payment job type:', (data as { type: string }).type)
+    }
+  },
+  {
+    connection,
+    concurrency: 5, // process up to 5 payment events simultaneously
+  },
+)
+
+paymentWorker.on('completed', (job) => {
+  console.log(`Payment job ${job.id} completed`)
+})
+
+paymentWorker.on('failed', (job, err) => {
+  console.error(`Payment job ${job?.id} failed:`, err.message)
+})
+
+// ── Notification worker ───────────────────────────────────────────────────────
+
+export const notificationWorker = new Worker<NotificationJobData>(
+  'notifications',
+  async (job: Job<NotificationJobData>) => {
+    const { data } = job
+
+    if (data.type === 'send_email') {
+      // TODO: integrate SendGrid
+      // For now log the notification intent
+      console.log(`[NOTIFICATION] Email to ${data.to} — template: ${data.template}`, data.data)
+    }
+  },
+  { connection, concurrency: 10 },
+)
+
+// ── Graceful shutdown ─────────────────────────────────────────────────────────
+
+export async function closeWorkers(): Promise<void> {
+  await Promise.all([
+    paymentWorker.close(),
+    notificationWorker.close(),
+    connection.quit(),
+  ])
+}

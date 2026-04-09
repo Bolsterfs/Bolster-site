@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --navy:       #0D1B3E;
+    --blue:       #2D5BE3;
+    --blue-mid:   #4A7BF7;
+    --teal:       #0F8B72;
+    --teal-light: #14B8A6;
+    --off-white:  #F0F4FF;
+    --mid-gray:   #8896B3;
+    --card-bg:    #162046;
+    --gold:       #D4AF37;
+  }
+
+  html {
+    /* Smooth scrolling for anchor links */
+    scroll-behavior: smooth;
+  }
+
+  /* Remove blue highlight on mobile tap */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Better focus styles for accessibility */
+  :focus-visible {
+    outline: 2px solid var(--teal-light);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-blue-600 hover:bg-blue-700 active:bg-blue-800
+           text-white font-semibold px-6 py-3 rounded-lg
+           transition-colors duration-150
+           disabled:opacity-50 disabled:cursor-not-allowed
+           focus-visible:ring-2 focus-visible:ring-teal-400;
+  }
+
+  .btn-secondary {
+    @apply bg-transparent border border-blue-500 hover:bg-blue-500/10
+           text-blue-400 font-semibold px-6 py-3 rounded-lg
+           transition-colors duration-150;
+  }
+
+  .card {
+    @apply bg-[#162046] border border-blue-900/40 rounded-xl p-6;
+  }
+
+  .input {
+    @apply w-full bg-navy border border-blue-900/60 rounded-lg px-4 py-3
+           text-white placeholder-gray-500
+           focus:outline-none focus:border-teal-400 focus:ring-1 focus:ring-teal-400
+           transition-colors duration-150;
+  }
+
+  .label {
+    @apply block text-sm font-medium text-gray-300 mb-1.5;
+  }
+
+  .error-text {
+    @apply text-red-400 text-sm mt-1;
+  }
+
+  /* Amount display — large, prominent */
+  .amount-display {
+    @apply font-bold text-4xl text-white tabular-nums;
+  }
+
+  /* Status badges */
+  .badge-active   { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-teal-900/50 text-teal-300; }
+  .badge-settled  { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-900/50 text-green-300; }
+  .badge-pending  { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-900/50 text-yellow-300; }
+  .badge-failed   { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-900/50 text-red-300; }
+  .badge-revoked  { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-900/50 text-gray-400; }
+}

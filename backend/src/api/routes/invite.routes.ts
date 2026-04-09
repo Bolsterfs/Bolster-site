@@ -1,0 +1,134 @@
+import type { FastifyInstance } from 'fastify'
+import { eq, and, isNull } from 'drizzle-orm'
+import { db } from '../../db/client.js'
+import { invites } from '../../db/schema/index.js'
+import { createInviteSchema } from '../../types/index.js'
+import { authenticate, requireKyc } from '../hooks/auth.hook.js'
+import { inviteService } from '../../services/invite/invite.service.js'
+import type { JwtPayload } from '../../types/index.js'
+
+export async function inviteRoutes(app: FastifyInstance) {
+
+  // ── GET /api/v1/invites/resolve/:token — PUBLIC (no auth) ────────────────
+  // Called when a contributor opens an invite link
+  app.get<{ Params: { token: string } }>(
+    '/resolve/:token',
+    async (request, reply) => {
+      const result = await inviteService.resolveInviteToken(
+        request.params.token,
+        request.ip,
+        request.headers['user-agent'],
+      )
+
+      if (!result.ok) {
+        return reply.status(404).send({
+          success: false,
+          error:   result.error.message,
+        })
+      }
+
+      const { invite, debt, recipient } = result.value
+
+      // Return only what the privacy level permits — never over-expose
+      const publicDebtData = {
+        creditorName:
+          invite.privacyLevel !== 'amount_only'
+            ? debt.creditorName
+            : undefined,
+        remainingAmountPence:
+          invite.privacyLevel === 'full_balance'
+            ? debt.totalAmountPence - debt.paidAmountPence
+            : undefined,
+        // Always show the amount the invite is for
+        inviteMaxAmountPence: invite.maxAmountPence,
+      }
+
+      return reply.send({
+        success: true,
+        data: {
+          inviteId:        invite.id,
+          privacyLevel:    invite.privacyLevel,
+          personalMessage: invite.personalMessage,
+          recipientFirstName: recipient.firstName,
+          debt:            publicDebtData,
+          expiresAt:       invite.expiresAt,
+        },
+      })
+    },
+  )
+
+  // All routes below require auth + KYC
+  app.addHook('onRequest', authenticate)
+  app.addHook('onRequest', requireKyc)
+
+  // ── GET /api/v1/invites ───────────────────────────────────────────────────
+  app.get('/', async (request, reply) => {
+    const user = request.user as JwtPayload
+
+    const userInvites = await db.query.invites.findMany({
+      where: eq(invites.userId, user.sub),
+      orderBy: (i, { desc }) => [desc(i.createdAt)],
+      with: { debt: true },
+    })
+
+    return reply.send({ success: true, data: userInvites })
+  })
+
+  // ── POST /api/v1/invites ──────────────────────────────────────────────────
+  app.post('/', async (request, reply) => {
+    const user = request.user as JwtPayload
+
+    const body = createInviteSchema.safeParse(request.body)
+    if (!body.success) {
+      return reply.status(400).send({
+        success: false,
+        error: 'Invalid invite data',
+        details: body.error.flatten().fieldErrors,
+      })
+    }
+
+    const result = await inviteService.createInvite(
+      user.sub,
+      body.data,
+      request.ip,
+    )
+
+    if (!result.ok) {
+      return reply.status(400).send({
+        success: false,
+        error: result.error.message,
+      })
+    }
+
+    return reply.status(201).send({
+      success: true,
+      data: {
+        invite:    result.value.invite,
+        inviteUrl: result.value.inviteUrl,
+      },
+    })
+  })
+
+  // ── DELETE /api/v1/invites/:id — revoke ───────────────────────────────────
+  app.delete<{
+    Params: { id: string }
+    Body:   { reason?: string }
+  }>('/:id', async (request, reply) => {
+    const user = request.user as JwtPayload
+
+    const result = await inviteService.revokeInvite(
+      request.params.id,
+      user.sub,
+      (request.body as { reason?: string }).reason,
+    )
+
+    if (!result.ok) {
+      return reply.status(400).send({
+        success: false,
+        error: result.error.message,
+      })
+    }
+
+    return reply.send({ success: true })
+  })
+}
