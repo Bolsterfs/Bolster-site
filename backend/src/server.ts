@@ -7,6 +7,7 @@ import { checkDatabaseConnection } from './db/client.js'
 import { authRoutes } from './api/routes/auth.routes.js'
 import { debtRoutes } from './api/routes/debt.routes.js'
 import { inviteRoutes } from './api/routes/invite.routes.js'
+import { kycRoutes } from './api/routes/kyc.routes.js'
 import { paymentRoutes } from './api/routes/payment.routes.js'
 import { webhookRoutes } from './api/routes/webhook.routes.js'
 import { healthRoutes } from './api/routes/health.routes.js'
@@ -50,6 +51,7 @@ await server.register(rateLimit, {
 await server.register(healthRoutes,  { prefix: '/health' })
 await server.register(authRoutes,    { prefix: '/api/v1/auth' })
 await server.register(debtRoutes,    { prefix: '/api/v1/debts' })
+await server.register(kycRoutes,     { prefix: '/api/v1/kyc' })
 await server.register(inviteRoutes,  { prefix: '/api/v1/invites' })
 await server.register(paymentRoutes, { prefix: '/api/v1/payments' })
 await server.register(webhookRoutes, { prefix: '/webhooks' })  // no auth — signature verified per-handler

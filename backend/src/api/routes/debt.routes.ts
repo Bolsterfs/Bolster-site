@@ -55,7 +55,7 @@ export async function debtRoutes(app: FastifyInstance) {
         creditorName,
         creditorSortCode: creditorSortCode.replace(/-/g, ''),
         creditorAccount:  creditorAccount.replace(/\s/g, ''),
-        creditorRef,
+        creditorRef:      creditorRef ?? null,
         totalAmountPence,
         copVerified:      false, // set to true after CoP check completes
       })

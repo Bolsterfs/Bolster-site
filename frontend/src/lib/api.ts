@@ -209,6 +209,32 @@ export const paymentApi = {
   list: () => apiFetch<PaymentStatus[]>('/payments'),
 }
 
+// ── KYC ───────────────────────────────────────────────────────────────────────
+
+export const kycApi = {
+  initiate: () => apiFetch<{ sdkToken: string; applicantId: string }>('/kyc/initiate', {
+    method: 'POST',
+  }),
+
+  submit: () => apiFetch<{ checkId: string; message: string }>('/kyc/submit', {
+    method: 'POST',
+  }),
+
+  status: () => apiFetch<{ kycStatus: string; hasApplicant: boolean }>('/kyc/status'),
+}
+
+// ── Refresh token (in-memory only — same security posture as access token) ────
+
+let refreshToken: string | null = null
+
+export function setRefreshToken(token: string) { refreshToken = token }
+export function getRefreshToken(): string | null { return refreshToken }
+
+export function clearAllTokens() {
+  accessToken   = null
+  refreshToken  = null
+}
+
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
 export function formatPence(pence: number): string {

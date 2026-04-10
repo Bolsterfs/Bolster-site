@@ -109,14 +109,14 @@ export class InviteService {
     const [invite] = await db
       .insert(invites)
       .values({
-        token:          'pending', // temporary — updated below
+        token:           'pending', // temporary — updated below
         userId,
-        debtId:         input.debtId,
-        privacyLevel:   input.privacyLevel,
-        personalMessage: input.personalMessage,
-        maxAmountPence: input.maxAmountPence,
+        debtId:          input.debtId,
+        privacyLevel:    input.privacyLevel,
+        personalMessage: input.personalMessage ?? null,
+        maxAmountPence:  input.maxAmountPence  ?? null,
         expiresAt,
-        status:         'active',
+        status:          'active',
       })
       .returning()
 
@@ -246,7 +246,7 @@ export class InviteService {
       .set({
         status:        'revoked',
         revokedAt:     new Date(),
-        revokedReason: reason,
+        revokedReason: reason ?? null,
         updatedAt:     new Date(),
       })
       .where(eq(invites.id, inviteId))

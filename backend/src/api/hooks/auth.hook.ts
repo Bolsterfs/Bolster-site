@@ -43,9 +43,3 @@ export async function requireKyc(
   }
 }
 
-// Extend FastifyRequest to include typed user payload
-declare module 'fastify' {
-  interface FastifyRequest {
-    user: JwtPayload
-  }
-}

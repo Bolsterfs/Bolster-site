@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { paymentApi, formatPence } from '../../../lib/api'
-import type { ResolvedInvite } from '../../../lib/api'
+import { paymentApi, formatPence } from '../../lib/api'
+import type { ResolvedInvite } from '../../lib/api'
 
 interface Props {
   inviteToken: string

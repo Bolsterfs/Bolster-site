@@ -84,7 +84,7 @@ export class AmlService {
           .values({
             subjectType,
             subjectName:  subject.name,
-            subjectEmail: subject.email,
+            subjectEmail: subject.email ?? null,
             result:       'error',
             matchCount:   0,
           })
@@ -110,7 +110,7 @@ export class AmlService {
         .values({
           subjectType,
           subjectName:         subject.name,
-          subjectEmail:        subject.email,
+          subjectEmail:        subject.email ?? null,
           complyAdvantageId:   String(data.data.id),
           result,
           matchCount:          totalHits,

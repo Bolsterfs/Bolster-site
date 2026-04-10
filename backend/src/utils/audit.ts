@@ -8,12 +8,12 @@ export interface AuditEventPayload {
   eventType:   AuditEventType
   entityType:  string
   entityId:    string
-  userId?:     string
+  userId?:     string | undefined
   actorType:   'system' | 'user' | 'webhook'
-  actorId?:    string
-  metadata?:   Record<string, unknown>
-  ipAddress?:  string
-  userAgent?:  string
+  actorId?:    string | undefined
+  metadata?:   Record<string, unknown> | undefined
+  ipAddress?:  string | undefined
+  userAgent?:  string | undefined
 }
 
 /**
@@ -28,12 +28,12 @@ export async function writeAuditEvent(payload: AuditEventPayload): Promise<Audit
       eventType:  payload.eventType,
       entityType: payload.entityType,
       entityId:   payload.entityId,
-      userId:     payload.userId,
+      userId:     payload.userId     ?? null,
       actorType:  payload.actorType,
-      actorId:    payload.actorId,
-      metadata:   payload.metadata,
-      ipAddress:  payload.ipAddress,
-      userAgent:  payload.userAgent,
+      actorId:    payload.actorId    ?? null,
+      metadata:   payload.metadata   ?? null,
+      ipAddress:  payload.ipAddress  ?? null,
+      userAgent:  payload.userAgent  ?? null,
     })
     .returning()
 

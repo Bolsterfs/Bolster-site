@@ -48,7 +48,7 @@ export async function authRoutes(app: FastifyInstance) {
         passwordHash,
         firstName,
         lastName,
-        phone,
+        phone:     phone ?? null,
         kycStatus: 'pending',
       })
       .returning({

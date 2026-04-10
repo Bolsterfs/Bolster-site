@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify'
-import { eq, and, isNull } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { db } from '../../db/client.js'
 import { invites } from '../../db/schema/index.js'
 import { createInviteSchema } from '../../types/index.js'

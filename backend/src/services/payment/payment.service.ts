@@ -1,7 +1,6 @@
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { db } from '../../db/client.js'
 import { payments, debts, invites } from '../../db/schema/index.js'
-import type { Payment } from '../../db/schema/index.js'
 import { truelayerService } from './truelayer.js'
 import { amlService } from '../aml/aml.service.js'
 import { calculateFee, validatePaymentAmount } from '../../utils/fees.js'
@@ -93,7 +92,7 @@ export class PaymentService {
         recipientUserId:   invite.userId,
         contributorEmail:  input.contributorEmail,
         contributorName:   input.contributorName,
-        contributorIp:     ipAddress,
+        contributorIp:     ipAddress ?? null,
         grossAmountPence:  fees.grossAmountPence,
         feeAmountPence:    fees.feeAmountPence,
         netAmountPence:    fees.netAmountPence,
@@ -226,13 +225,13 @@ export class PaymentService {
       })
       .where(eq(payments.id, payment.id))
 
-    // Update debt balance
+    // Update debt balance — atomic increment so concurrent payments are safe
     await db
       .update(debts)
-      .set((d) => ({
-        paidAmountPence: Number(payment.netAmountPence),
+      .set({
+        paidAmountPence: sql`${debts.paidAmountPence} + ${payment.netAmountPence}`,
         updatedAt:       now,
-      }))
+      })
       .where(eq(debts.id, payment.debtId))
 
     // Check if debt is fully resolved

@@ -1,11 +1,23 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { paymentApi, formatPence } from '../../../lib/api'
 import type { PaymentStatus } from '../../../lib/api'
 
 export default function PaymentCompletePage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-screen bg-navy flex items-center justify-center">
+        <p className="text-mid-gray animate-pulse">Loading…</p>
+      </main>
+    }>
+      <PaymentCompleteContent />
+    </Suspense>
+  )
+}
+
+function PaymentCompleteContent() {
   const searchParams = useSearchParams()
   const paymentId = searchParams.get('payment_id')
   const [status, setStatus] = useState<PaymentStatus | null>(null)
