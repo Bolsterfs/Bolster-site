@@ -4,10 +4,8 @@ import 'dotenv/config'
 export default {
   schema:    './src/db/schema/index.ts',
   out:       './src/db/migrations',
-  driver:    'pg',
+  dialect:   'postgresql',
   dbCredentials: {
-    connectionString: process.env.DATABASE_URL!,
+    url: process.env.DATABASE_URL!,
   },
-  verbose: true,
-  strict:  true,
 } satisfies Config
