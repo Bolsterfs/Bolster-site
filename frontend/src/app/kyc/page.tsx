@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { kycApi } from '../../lib/api'
+import { kycApi, setAccessToken, setRefreshToken } from '../../lib/api'
 
 // Onfido SDK types — loaded from CDN at runtime
 declare global {
@@ -132,6 +132,19 @@ export default function KycPage() {
     setState('pending')
   }
 
+  // ── Dev bypass ───────────────────────────────────────────────────────────
+  async function handleDevApprove() {
+    const result = await kycApi.devApprove()
+    if (!result.ok) {
+      setErrorMsg(result.error)
+      setState('error')
+      return
+    }
+    setAccessToken(result.data.accessToken)
+    setRefreshToken(result.data.refreshToken)
+    router.push('/dashboard')
+  }
+
   // ── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-navy flex flex-col">
@@ -228,6 +241,23 @@ export default function KycPage() {
           )}
         </div>
       </main>
+
+      {process.env.NODE_ENV === 'development' && (
+        <div className="border-t border-yellow-800/50 bg-yellow-950/30 px-4 py-3">
+          <div className="max-w-lg mx-auto flex items-center justify-between gap-4">
+            <p className="text-xs text-yellow-500/80">
+              Dev mode — Onfido not required
+            </p>
+            <button
+              type="button"
+              onClick={() => void handleDevApprove()}
+              className="text-xs px-3 py-1.5 rounded border border-yellow-700/60 text-yellow-400 hover:bg-yellow-900/40 transition-colors"
+            >
+              Skip KYC (dev only)
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 

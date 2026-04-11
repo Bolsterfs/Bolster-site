@@ -14,18 +14,31 @@ interface InvitePageProps {
  * payment flow component.
  */
 export default async function InvitePage({ params }: InvitePageProps) {
-  // Fetch invite details server-side (better for SEO and initial load)
-  const response = await fetch(
-    `${process.env.API_URL}/api/v1/invites/resolve/${params.token}`,
-    { cache: 'no-store' }, // invites must always be fresh
-  )
+  // Fetch invite details server-side (better for SEO and initial load).
+  // Wrap in try-catch: if API_URL is misconfigured or the backend is down,
+  // fetch() throws a TypeError — without this it propagates as an unhandled
+  // Server Component error and Next.js shows a generic error page.
+  let invite: unknown
+  try {
+    const response = await fetch(
+      `${process.env.API_URL}/api/v1/invites/resolve/${params.token}`,
+      { cache: 'no-store' }, // invites must always be fresh
+    )
 
-  if (!response.ok) {
-    // Show a friendly not-found page rather than exposing error details
+    if (!response.ok) {
+      // Expired, revoked, or non-existent token — show a friendly not-found page
+      notFound()
+    }
+
+    const body = await response.json() as { data: unknown }
+    invite = body.data
+  } catch {
+    // Network error or invalid API_URL — treat as not found rather than 500
     notFound()
   }
 
-  const { data: invite } = await response.json()
+  // Narrow the type now that we know the fetch succeeded
+  const typedInvite = invite as import('../../../lib/api').ResolvedInvite
 
   return (
     <main className="min-h-screen bg-navy flex flex-col">
@@ -46,19 +59,19 @@ export default async function InvitePage({ params }: InvitePageProps) {
               <span className="text-3xl">💙</span>
             </div>
             <h1 className="text-2xl font-bold text-white mb-2">
-              {invite.recipientFirstName} needs your help
+              {typedInvite.recipientFirstName} needs your help
             </h1>
             <p className="text-mid-gray text-sm leading-relaxed">
               You&apos;ve been invited to help with a payment.
-              Your money goes directly to the creditor — not to {invite.recipientFirstName}.
+              Your money goes directly to the creditor — not to {typedInvite.recipientFirstName}.
             </p>
           </div>
 
           {/* What the invite is for */}
-          {invite.personalMessage && (
+          {typedInvite.personalMessage && (
             <div className="card mb-6 border-l-4 border-l-teal-500">
-              <p className="text-sm text-mid-gray mb-1">Message from {invite.recipientFirstName}</p>
-              <p className="text-white italic">&ldquo;{invite.personalMessage}&rdquo;</p>
+              <p className="text-sm text-mid-gray mb-1">Message from {typedInvite.recipientFirstName}</p>
+              <p className="text-white italic">&ldquo;{typedInvite.personalMessage}&rdquo;</p>
             </div>
           )}
 
@@ -68,16 +81,16 @@ export default async function InvitePage({ params }: InvitePageProps) {
               <div>
                 <p className="text-sm text-mid-gray mb-1">Paying to</p>
                 <p className="text-white font-semibold">
-                  {invite.debt.creditorName ?? 'Creditor (private)'}
+                  {typedInvite.debt.creditorName ?? 'Creditor (private)'}
                 </p>
               </div>
-              {invite.debt.remainingAmountPence && (
+              {typedInvite.debt.remainingAmountPence && (
                 <div className="text-right">
                   <p className="text-sm text-mid-gray mb-1">Outstanding</p>
                   <p className="text-white font-bold">
                     {new Intl.NumberFormat('en-GB', {
                       style: 'currency', currency: 'GBP',
-                    }).format(invite.debt.remainingAmountPence / 100)}
+                    }).format(typedInvite.debt.remainingAmountPence / 100)}
                   </p>
                 </div>
               )}
@@ -87,7 +100,7 @@ export default async function InvitePage({ params }: InvitePageProps) {
           {/* The payment form */}
           <PayContributorFlow
             inviteToken={params.token}
-            invite={invite}
+            invite={typedInvite}
           />
 
           {/* Trust signals */}

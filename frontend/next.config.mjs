@@ -1,5 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Expose backend URL to the Next.js server (used by the rewrite proxy).
+  // Not prefixed with NEXT_PUBLIC_ — server-side only, never sent to the browser.
+  env: {
+    API_URL: process.env.API_URL ?? 'http://localhost:3001',
+  },
+
   // API calls go to the backend service
   async rewrites() {
     return [

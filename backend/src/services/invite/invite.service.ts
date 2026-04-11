@@ -14,10 +14,16 @@ export interface InviteWithContext {
   recipient: Pick<User, 'firstName' | 'lastName'>
 }
 
+// HMAC-SHA256 in base64url is always exactly 43 characters (256 bits / 6 bits per char,
+// no padding). The separator between payload and signature is '-', which Fastify can
+// match in route parameters. We use fixed-length slicing in verify rather than
+// splitting on '-', because '-' also appears legitimately inside the base64url payload.
+const SIGNATURE_B64URL_LENGTH = 43
+
 /**
  * Generate a cryptographically secure, HMAC-signed invite token.
- * The token encodes the invite ID and a timestamp, signed with INVITE_SECRET.
- * This means we can verify token authenticity without a database lookup.
+ * Format: {base64url(payload)}-{hmac_sha256_base64url}
+ * The separator is '-' (not '.') so Fastify can match it in :token route params.
  */
 export function generateInviteToken(inviteId: string): string {
   const payload   = `${inviteId}:${Date.now()}`
@@ -26,18 +32,21 @@ export function generateInviteToken(inviteId: string): string {
     .update(payload)
     .digest('base64url')
 
-  return `${Buffer.from(payload).toString('base64url')}.${signature}`
+  return `${Buffer.from(payload).toString('base64url')}-${signature}`
 }
 
 /**
  * Verify an invite token signature and extract the invite ID.
  * Returns null if the signature is invalid (tampered token).
+ * Uses fixed-length slicing rather than a separator split, because '-' can also
+ * appear in the base64url-encoded payload.
  */
 export function verifyInviteToken(token: string): string | null {
-  const parts = token.split('.')
-  if (parts.length !== 2) return null
+  // Minimum viable token: 1 payload char + separator + 43 sig chars
+  if (token.length < SIGNATURE_B64URL_LENGTH + 2) return null
 
-  const [encodedPayload, providedSignature] = parts as [string, string]
+  const providedSignature = token.slice(-SIGNATURE_B64URL_LENGTH)
+  const encodedPayload    = token.slice(0, token.length - SIGNATURE_B64URL_LENGTH - 1)
 
   const payload           = Buffer.from(encodedPayload, 'base64url').toString()
   const expectedSignature = crypto

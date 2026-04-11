@@ -7,17 +7,31 @@
 
 const API_BASE = '/api/v1'
 
-// ── Token storage (memory only — no localStorage for financial apps) ──────────
-// Tokens are stored in module state and refreshed automatically.
-// On page refresh the user must log in again — this is intentional for security.
-let accessToken: string | null = null
+// ── Token storage ─────────────────────────────────────────────────────────────
+// Access token: sessionStorage so it survives client-side navigations and page
+// refreshes within the same tab, but is cleared when the tab closes.
+// Refresh token: memory only — intentionally lost on hard refresh (more secure).
+// No localStorage — tokens must never persist across browser restarts.
+
+const SESSION_KEY = 'bolster_at'
+
+// Initialise from sessionStorage on module load (client only — window is
+// undefined during Next.js SSR, in which case we start unauthenticated).
+let accessToken: string | null =
+  typeof window !== 'undefined' ? sessionStorage.getItem(SESSION_KEY) : null
+
+export function getAccessToken(): string | null {
+  return accessToken
+}
 
 export function setAccessToken(token: string) {
   accessToken = token
+  if (typeof window !== 'undefined') sessionStorage.setItem(SESSION_KEY, token)
 }
 
 export function clearTokens() {
   accessToken = null
+  if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_KEY)
 }
 
 // ── Base fetch wrapper ────────────────────────────────────────────────────────
@@ -27,7 +41,9 @@ async function apiFetch<T>(
   options: RequestInit = {},
 ): Promise<{ data: T; ok: true } | { error: string; ok: false }> {
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(options.body !== undefined && options.body !== null
+      ? { 'Content-Type': 'application/json' }
+      : {}),
     ...(options.headers as Record<string, string> | undefined),
   }
 
@@ -221,6 +237,11 @@ export const kycApi = {
   }),
 
   status: () => apiFetch<{ kycStatus: string; hasApplicant: boolean }>('/kyc/status'),
+
+  /** DEV ONLY — bypasses Onfido and returns fresh tokens with kycStatus approved. */
+  devApprove: () => apiFetch<{ accessToken: string; refreshToken: string }>('/kyc/dev-approve', {
+    method: 'POST',
+  }),
 }
 
 // ── Refresh token (in-memory only — same security posture as access token) ────
@@ -231,8 +252,9 @@ export function setRefreshToken(token: string) { refreshToken = token }
 export function getRefreshToken(): string | null { return refreshToken }
 
 export function clearAllTokens() {
-  accessToken   = null
-  refreshToken  = null
+  accessToken  = null
+  refreshToken = null
+  if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_KEY)
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────

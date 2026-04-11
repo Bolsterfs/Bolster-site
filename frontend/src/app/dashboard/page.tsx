@@ -1,10 +1,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { debtApi, inviteApi, paymentApi, formatPence } from '../../lib/api'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { debtApi, inviteApi, paymentApi, formatPence, clearAllTokens } from '../../lib/api'
 import type { Debt, Invite, PaymentStatus } from '../../lib/api'
+import { useRequireAuth } from '../../lib/useRequireAuth'
 
 export default function DashboardPage() {
+  const router = useRouter()
+  const { isChecking } = useRequireAuth()
+
   const [debts,    setDebts]    = useState<Debt[]>([])
   const [invites,  setInvites]  = useState<Invite[]>([])
   const [payments, setPayments] = useState<PaymentStatus[]>([])
@@ -12,6 +18,7 @@ export default function DashboardPage() {
   const [tab,      setTab]      = useState<'debts' | 'invites' | 'history'>('debts')
 
   useEffect(() => {
+    if (isChecking) return
     async function loadAll() {
       const [d, i, p] = await Promise.all([
         debtApi.list(),
@@ -24,14 +31,16 @@ export default function DashboardPage() {
       setLoading(false)
     }
     void loadAll()
-  }, [])
+  }, [isChecking])
 
-  // ── Stats bar ─────────────────────────────────────────────────────────────
-  const totalOwed   = debts.reduce((s, d) => s + d.totalAmountPence - d.paidAmountPence, 0)
-  const totalPaid   = debts.reduce((s, d) => s + d.paidAmountPence, 0)
-  const activeInvites = invites.filter((i) => i.status === 'active').length
+  function handleSignOut() {
+    clearAllTokens()
+    router.replace('/login')
+  }
 
-  if (loading) {
+  // ── Loading / auth check ──────────────────────────────────────────────────
+
+  if (isChecking || loading) {
     return (
       <div className="min-h-screen bg-navy flex items-center justify-center">
         <div className="text-mid-gray animate-pulse">Loading your dashboard…</div>
@@ -39,13 +48,24 @@ export default function DashboardPage() {
     )
   }
 
+  // ── Stats bar ─────────────────────────────────────────────────────────────
+  const totalOwed     = debts.reduce((s, d) => s + d.totalAmountPence - d.paidAmountPence, 0)
+  const totalPaid     = debts.reduce((s, d) => s + d.paidAmountPence, 0)
+  const activeInvites = invites.filter((i) => i.status === 'active').length
+
   return (
     <div className="min-h-screen bg-navy">
       {/* Header */}
       <header className="px-4 py-4 border-b border-blue-900/40">
         <div className="max-w-lg mx-auto flex items-center justify-between">
           <span className="text-white font-bold text-xl tracking-wide">BOLSTER</span>
-          <button className="text-mid-gray text-sm hover:text-white">Sign out</button>
+          <button
+            type="button"
+            className="text-mid-gray text-sm hover:text-white transition-colors"
+            onClick={handleSignOut}
+          >
+            Sign out
+          </button>
         </div>
       </header>
 
@@ -127,24 +147,24 @@ export default function DashboardPage() {
                   </div>
 
                   {debt.status !== 'resolved' && debt.copVerified && (
-                    <a
+                    <Link
                       href={`/dashboard/invites/new?debtId=${debt.id}`}
                       className="mt-3 btn-primary text-sm py-2 inline-block text-center w-full"
                     >
                       Create invite link →
-                    </a>
+                    </Link>
                   )}
                 </div>
               ))
             )}
 
             {debts.length > 0 && (
-              <a
+              <Link
                 href="/dashboard/debts/new"
                 className="btn-secondary text-sm py-2 block text-center w-full"
               >
                 + Link another debt
-              </a>
+              </Link>
             )}
           </div>
         )}
@@ -242,15 +262,15 @@ export default function DashboardPage() {
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {
-    active:       'badge-active',
-    settled:      'badge-settled',
-    fully_paid:   'badge-settled',
-    resolved:     'badge-settled',
-    pending:      'badge-pending',
-    initiated:    'badge-pending',
-    failed:       'badge-failed',
-    revoked:      'badge-revoked',
-    expired:      'badge-revoked',
+    active:     'badge-active',
+    settled:    'badge-settled',
+    fully_paid: 'badge-settled',
+    resolved:   'badge-settled',
+    pending:    'badge-pending',
+    initiated:  'badge-pending',
+    failed:     'badge-failed',
+    revoked:    'badge-revoked',
+    expired:    'badge-revoked',
   }
   return (
     <span className={map[status] ?? 'badge-active'}>
@@ -276,9 +296,9 @@ function EmptyState({
       <h3 className="text-white font-semibold mb-1">{title}</h3>
       <p className="text-mid-gray text-sm mb-4">{description}</p>
       {action && (
-        <a href={action.href} className="btn-primary inline-block px-6 py-2 text-sm">
+        <Link href={action.href} className="btn-primary inline-block px-6 py-2 text-sm">
           {action.label}
-        </a>
+        </Link>
       )}
     </div>
   )

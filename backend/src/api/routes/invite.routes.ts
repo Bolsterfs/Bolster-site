@@ -11,11 +11,11 @@ export async function inviteRoutes(app: FastifyInstance) {
 
   // ── GET /api/v1/invites/resolve/:token — PUBLIC (no auth) ────────────────
   // Called when a contributor opens an invite link
-  app.get<{ Params: { token: string } }>(
-    '/resolve/:token',
+  app.get<{ Params: { '*': string } }>(
+    '/resolve/*',
     async (request, reply) => {
       const result = await inviteService.resolveInviteToken(
-        request.params.token,
+        request.params['*'],
         request.ip,
         request.headers['user-agent'],
       )
@@ -57,12 +57,8 @@ export async function inviteRoutes(app: FastifyInstance) {
     },
   )
 
-  // All routes below require auth + KYC
-  app.addHook('onRequest', authenticate)
-  app.addHook('onRequest', requireKyc)
-
   // ── GET /api/v1/invites ───────────────────────────────────────────────────
-  app.get('/', async (request, reply) => {
+  app.get('/', { preHandler: [authenticate, requireKyc] }, async (request, reply) => {
     const user = request.user as JwtPayload
 
     const userInvites = await db.query.invites.findMany({
@@ -75,7 +71,7 @@ export async function inviteRoutes(app: FastifyInstance) {
   })
 
   // ── POST /api/v1/invites ──────────────────────────────────────────────────
-  app.post('/', async (request, reply) => {
+  app.post('/', { preHandler: [authenticate, requireKyc] }, async (request, reply) => {
     const user = request.user as JwtPayload
 
     const body = createInviteSchema.safeParse(request.body)
@@ -113,7 +109,7 @@ export async function inviteRoutes(app: FastifyInstance) {
   app.delete<{
     Params: { id: string }
     Body:   { reason?: string }
-  }>('/:id', async (request, reply) => {
+  }>('/:id', { preHandler: [authenticate, requireKyc] }, async (request, reply) => {
     const user = request.user as JwtPayload
 
     const result = await inviteService.revokeInvite(
