@@ -188,6 +188,28 @@ export default function NewInvitePage() {
               </button>
             </div>
 
+            {/* Share buttons */}
+            <div className="flex flex-col gap-3 mb-4">
+              <a
+                href={`https://wa.me/?text=${encodeURIComponent(
+                  `Hi, I wanted to share something privately with you. If you'd like to help me with a payment, it goes directly to the creditor — not to me. No pressure at all 💙\n${inviteUrl}`
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ backgroundColor: '#25D366', color: 'white', fontWeight: 700, borderRadius: '12px', padding: '12px 24px', fontSize: '15px', textAlign: 'center', textDecoration: 'none', display: 'block', width: '100%', boxSizing: 'border-box' }}
+              >
+                Share via WhatsApp 💬
+              </a>
+              <a
+                href={`sms:?body=${encodeURIComponent(
+                  `Hi, I wanted to share something privately with you. If you'd like to help me with a payment, it goes directly to the creditor — not to me. No pressure at all 💙\n${inviteUrl}`
+                )}`}
+                style={{ backgroundColor: 'transparent', color: '#6B21A8', fontWeight: 700, borderRadius: '12px', padding: '12px 24px', fontSize: '15px', textAlign: 'center', textDecoration: 'none', display: 'block', width: '100%', boxSizing: 'border-box', border: '2px solid #6B21A8' }}
+              >
+                Share via SMS 📱
+              </a>
+            </div>
+
             {/* Privacy reminder */}
             <div className="rounded-lg bg-blue-950/40 border border-blue-900/40 px-4 py-3 mb-6">
               <p className="text-xs text-mid-gray leading-relaxed">
