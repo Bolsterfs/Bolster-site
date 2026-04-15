@@ -216,6 +216,7 @@ export class PaymentService {
   ): Promise<Result<PaymentInitiationResult>> {
     const stripeResult = await stripeService.createCheckoutSession({
       grossAmountPence: fees.grossAmountPence,
+      feeAmountPence:   fees.feeAmountPence,
       creditorName,
       bolsterPaymentId: payment.id,
       inviteToken,

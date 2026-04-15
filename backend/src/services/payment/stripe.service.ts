@@ -37,9 +37,14 @@ export class StripePaymentService {
   /**
    * Create a Stripe Checkout session for contributor payment.
    * The gross amount (net to creditor + Bolster fee) is charged.
+   *
+   * When STRIPE_CONNECT_ACCOUNT_ID is set, Stripe Connect direct charges are
+   * used: the payment is created on the connected account and
+   * application_fee_amount automatically splits the Bolster platform fee.
    */
   async createCheckoutSession(params: {
     grossAmountPence: number
+    feeAmountPence:   number
     creditorName:     string
     bolsterPaymentId: string
     inviteToken:      string
@@ -48,8 +53,9 @@ export class StripePaymentService {
   }): Promise<Result<StripeCheckoutResult>> {
     try {
       const stripe = this.getClient()
+      const connectedAccount = env.STRIPE_CONNECT_ACCOUNT_ID
 
-      const session = await stripe.checkout.sessions.create({
+      const sessionParams: Stripe.Checkout.SessionCreateParams = {
         mode: 'payment',
         payment_method_types: ['card'],
         line_items: [
@@ -71,7 +77,21 @@ export class StripePaymentService {
           bolsterPaymentId: params.bolsterPaymentId,
           inviteToken:      params.inviteToken,
         },
-      })
+      }
+
+      // When a connected account is configured, use Stripe Connect direct
+      // charges so the net amount lands in the creditor's connected account
+      // and the platform fee is automatically retained by Bolster.
+      if (connectedAccount) {
+        sessionParams.payment_intent_data = {
+          application_fee_amount: params.feeAmountPence,
+        }
+      }
+
+      const session = await stripe.checkout.sessions.create(
+        sessionParams,
+        connectedAccount ? { stripeAccount: connectedAccount } : undefined,
+      )
 
       if (!session.url) {
         return err(new Error('Stripe did not return a checkout URL'))

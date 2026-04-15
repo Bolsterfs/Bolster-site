@@ -29,9 +29,10 @@ const envSchema = z.object({
   VERIFF_SECRET_KEY: z.string().min(1),
 
   // Stripe (fallback when TrueLayer is disabled or fails)
-  STRIPE_SECRET_KEY:      z.string().min(1).optional(),
-  STRIPE_PUBLISHABLE_KEY: z.string().min(1).optional(),
-  STRIPE_WEBHOOK_SECRET:  z.string().min(1).optional(),
+  STRIPE_SECRET_KEY:          z.string().min(1).optional(),
+  STRIPE_PUBLISHABLE_KEY:     z.string().min(1).optional(),
+  STRIPE_WEBHOOK_SECRET:      z.string().min(1).optional(),
+  STRIPE_CONNECT_ACCOUNT_ID:  z.string().min(1).optional(),
 
   // Comply Advantage
   COMPLY_ADVANTAGE_API_KEY: z.string().min(1),

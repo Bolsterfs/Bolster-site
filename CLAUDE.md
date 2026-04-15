@@ -112,6 +112,17 @@ bolster/
 - ICO registered as data controller (UK GDPR / DPA 2018)
 - All data in AWS eu-west-2 (London) — UK data residency
 
+## Fee collection architecture (Stripe Connect)
+Bolster collects a platform fee on every payment via Stripe Connect direct charges:
+- Contributor pays the **gross** amount (net + Bolster fee) via Stripe Checkout
+- `application_fee_amount` is set on the PaymentIntent → Stripe automatically
+  splits the payment: net amount to the connected creditor account, fee retained
+  by Bolster's platform account
+- Fee calculation lives in `fees.ts` (percentage-based with min/max caps)
+- When `STRIPE_CONNECT_ACCOUNT_ID` is not set, Stripe operates in standard mode
+  with no fee splitting (useful for local dev without Connect)
+- In sandbox, use Stripe test mode + a test connected account
+
 ## Environment variables (see .env.example)
 Database, Redis, TrueLayer, Veriff, Comply Advantage, JWT secrets,
-AWS credentials, SendGrid (email), Twilio (SMS)
+AWS credentials, SendGrid (email), Twilio (SMS), Stripe (Connect)
