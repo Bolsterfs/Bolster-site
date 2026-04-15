@@ -1,3 +1,4 @@
+import crypto from 'crypto'
 import { eq } from 'drizzle-orm'
 import { db } from '../../db/client.js'
 import { users } from '../../db/schema/index.js'
@@ -6,58 +7,48 @@ import { writeAuditEvent } from '../../utils/audit.js'
 import type { Result } from '../../types/index.js'
 import { ok, err } from '../../types/index.js'
 
-interface OnfidoApplicantResponse {
-  id:         string
-  first_name: string
-  last_name:  string
-  email:      string
-  created_at: string
-}
-
-interface OnfidoCheckResponse {
-  id:          string
-  status:      string
-  result?:     string
-  href:        string
-  created_at:  string
-}
-
-interface OnfidoSdkTokenResponse {
-  token: string
+interface VeriffSessionResponse {
+  status:       string
+  verification: {
+    id:        string
+    url:       string
+    vendorData: string
+    host:      string
+    status:    string
+    sessionToken: string
+  }
 }
 
 /**
- * KYC Service — Onfido integration
+ * KYC Service — Veriff integration
  *
  * Flow:
- * 1. Create Onfido applicant for the user
- * 2. Generate SDK token for the frontend Onfido SDK
- * 3. User completes document + liveness check in browser
- * 4. Our webhook (/webhooks/onfido) receives the result
- * 5. We update user.kyc_status based on the check result
+ * 1. Create a Veriff session for the user
+ * 2. Redirect user to the Veriff session URL
+ * 3. User completes document + selfie verification in Veriff's hosted flow
+ * 4. Our webhook (/webhooks/veriff) receives the decision
+ * 5. We update user.kyc_status based on the verification result
  *
  * Required under MLR 2017 Reg 28 (Customer Due Diligence)
  * Records retained 5 years minimum (MLR 2017 Reg 40)
  */
 export class KycService {
-  private readonly baseUrl = env.ONFIDO_REGION === 'EU'
-    ? 'https://api.eu.onfido.com/v3.6'
-    : 'https://api.us.onfido.com/v3.6'
+  private readonly baseUrl = 'https://stationapi.veriff.com/v1'
 
   private get headers() {
     return {
-      'Authorization': `Token token=${env.ONFIDO_API_TOKEN}`,
+      'X-AUTH-CLIENT': env.VERIFF_API_KEY,
       'Content-Type':  'application/json',
     }
   }
 
   /**
-   * Initiate KYC for a user — creates Onfido applicant + returns SDK token.
-   * The frontend uses the SDK token to launch the Onfido SDK widget.
+   * Initiate KYC for a user — creates a Veriff session.
+   * Returns the session URL for the frontend to redirect the user to.
    */
   async initiateKyc(userId: string): Promise<Result<{
-    sdkToken:    string
-    applicantId: string
+    sessionUrl: string
+    sessionId:  string
   }>> {
     const user = await db.query.users.findFirst({
       where: eq(users.id, userId),
@@ -69,32 +60,46 @@ export class KycService {
     }
 
     try {
-      // Step 1: Create or reuse applicant
-      let applicantId = user.kycApplicantId
+      // Veriff requires the callback URL to use HTTPS.
+      // In development APP_URL is http://localhost:3000, so we force https here.
+      // In production APP_URL is already https.
+      const appUrl      = env.APP_URL.replace(/^http:\/\//, 'https://')
+      const callbackUrl = `${appUrl}/kyc`
 
-      if (!applicantId) {
-        const applicantResult = await this.createApplicant(
-          user.firstName,
-          user.lastName,
-          user.email,
-        )
-        if (!applicantResult.ok) return err(applicantResult.error)
+      // If we already have a session, create a fresh one — Veriff sessions
+      // are stateless from our side and the user may need to retry.
+      const response = await fetch(`${this.baseUrl}/sessions`, {
+        method:  'POST',
+        headers: this.headers,
+        body: JSON.stringify({
+          verification: {
+            callback:   callbackUrl,
+            person: {
+              firstName: user.firstName,
+              lastName:  user.lastName,
+            },
+            vendorData: userId,
+          },
+        }),
+      })
 
-        applicantId = applicantResult.value.id
-
-        await db
-          .update(users)
-          .set({
-            kycApplicantId: applicantId,
-            kycStatus:      'in_progress',
-            updatedAt:      new Date(),
-          })
-          .where(eq(users.id, userId))
+      if (!response.ok) {
+        const text = await response.text()
+        return err(new Error(`Veriff session creation failed: ${response.status} — ${text}`))
       }
 
-      // Step 2: Generate SDK token for the frontend
-      const tokenResult = await this.generateSdkToken(applicantId)
-      if (!tokenResult.ok) return err(tokenResult.error)
+      const data = await response.json() as VeriffSessionResponse
+      const sessionId  = data.verification.id
+      const sessionUrl = data.verification.url
+
+      await db
+        .update(users)
+        .set({
+          kycApplicantId: sessionId,
+          kycStatus:      'in_progress',
+          updatedAt:      new Date(),
+        })
+        .where(eq(users.id, userId))
 
       await writeAuditEvent({
         eventType:  'kyc_initiated',
@@ -103,92 +108,29 @@ export class KycService {
         userId,
         actorType:  'user',
         actorId:    userId,
-        metadata:   { applicantId },
+        metadata:   { sessionId },
       })
 
-      return ok({ sdkToken: tokenResult.value.token, applicantId })
+      return ok({ sessionUrl, sessionId })
     } catch (e) {
       return err(e instanceof Error ? e : new Error(String(e)))
     }
   }
 
   /**
-   * After the user completes the SDK flow, submit a check.
-   * Result comes back via webhook.
+   * Verify a Veriff webhook signature using HMAC-SHA256.
+   * Veriff signs the raw request body with the shared secret key.
    */
-  async submitCheck(userId: string): Promise<Result<OnfidoCheckResponse>> {
-    const user = await db.query.users.findFirst({
-      where: eq(users.id, userId),
-    })
+  verifyWebhookSignature(rawBody: string, signature: string): boolean {
+    const hmac = crypto
+      .createHmac('sha256', env.VERIFF_SECRET_KEY)
+      .update(Buffer.from(rawBody, 'utf8'))
+      .digest('hex')
 
-    if (!user?.kycApplicantId) {
-      return err(new Error('KYC not initiated — call initiateKyc first'))
-    }
-
-    try {
-      const response = await fetch(`${this.baseUrl}/checks`, {
-        method:  'POST',
-        headers: this.headers,
-        body: JSON.stringify({
-          applicant_id: user.kycApplicantId,
-          report_names: ['document', 'facial_similarity_photo'],
-          // Webhook receives result — configured in Onfido dashboard
-        }),
-      })
-
-      if (!response.ok) {
-        const text = await response.text()
-        return err(new Error(`Onfido check submission failed: ${response.status} — ${text}`))
-      }
-
-      const check = await response.json() as OnfidoCheckResponse
-
-      await db
-        .update(users)
-        .set({ kycCheckId: check.id, updatedAt: new Date() })
-        .where(eq(users.id, userId))
-
-      return ok(check)
-    } catch (e) {
-      return err(e instanceof Error ? e : new Error(String(e)))
-    }
-  }
-
-  private async createApplicant(
-    firstName: string,
-    lastName:  string,
-    email:     string,
-  ): Promise<Result<OnfidoApplicantResponse>> {
-    const response = await fetch(`${this.baseUrl}/applicants`, {
-      method:  'POST',
-      headers: this.headers,
-      body: JSON.stringify({ first_name: firstName, last_name: lastName, email }),
-    })
-
-    if (!response.ok) {
-      return err(new Error(`Onfido applicant creation failed: ${response.status}`))
-    }
-
-    return ok(await response.json() as OnfidoApplicantResponse)
-  }
-
-  private async generateSdkToken(
-    applicantId: string,
-  ): Promise<Result<OnfidoSdkTokenResponse>> {
-    const response = await fetch(`${this.baseUrl}/sdk_token`, {
-      method:  'POST',
-      headers: this.headers,
-      body: JSON.stringify({
-        applicant_id:  applicantId,
-        referrer:      `${env.APP_URL}/*`,
-      }),
-    })
-
-    if (!response.ok) {
-      return err(new Error(`Onfido SDK token generation failed: ${response.status}`))
-    }
-
-    return ok(await response.json() as OnfidoSdkTokenResponse)
+    return crypto.timingSafeEqual(
+      Buffer.from(hmac, 'hex'),
+      Buffer.from(signature, 'hex'),
+    )
   }
 }
 

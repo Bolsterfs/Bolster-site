@@ -78,4 +78,25 @@
   .badge-pending  { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-900/50 text-yellow-300; }
   .badge-failed   { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-900/50 text-red-300; }
   .badge-revoked  { @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-900/50 text-gray-400; }
+
+  /* ── Warm theme (registration / login pages) ─────────────────────────── */
+
+  .input-warm {
+    @apply w-full bg-white border border-[#D4C5B5] rounded-xl px-4 py-3
+           text-[#2D2D2D] placeholder-stone-400
+           focus:outline-none focus:border-[#0F8B72] focus:ring-2 focus:ring-[#0F8B72]/20
+           transition-all duration-150;
+  }
+
+  .label-warm {
+    @apply block text-sm font-medium text-[#5A5A5A] mb-1.5;
+  }
+
+  .btn-warm {
+    @apply bg-[#0F8B72] hover:bg-[#0d7a64] active:bg-[#0b6a57]
+           text-white font-semibold px-6 py-3.5 rounded-xl
+           transition-colors duration-150 shadow-sm
+           disabled:opacity-50 disabled:cursor-not-allowed
+           focus-visible:ring-2 focus-visible:ring-[#0F8B72] focus-visible:ring-offset-2;
+  }
 }

@@ -228,17 +228,13 @@ export const paymentApi = {
 // ── KYC ───────────────────────────────────────────────────────────────────────
 
 export const kycApi = {
-  initiate: () => apiFetch<{ sdkToken: string; applicantId: string }>('/kyc/initiate', {
+  initiate: () => apiFetch<{ sessionUrl: string; sessionId: string }>('/kyc/initiate', {
     method: 'POST',
   }),
 
-  submit: () => apiFetch<{ checkId: string; message: string }>('/kyc/submit', {
-    method: 'POST',
-  }),
+  status: () => apiFetch<{ kycStatus: string; hasSession: boolean }>('/kyc/status'),
 
-  status: () => apiFetch<{ kycStatus: string; hasApplicant: boolean }>('/kyc/status'),
-
-  /** DEV ONLY — bypasses Onfido and returns fresh tokens with kycStatus approved. */
+  /** DEV ONLY — bypasses Veriff and returns fresh tokens with kycStatus approved. */
   devApprove: () => apiFetch<{ accessToken: string; refreshToken: string }>('/kyc/dev-approve', {
     method: 'POST',
   }),
@@ -257,7 +253,28 @@ export function clearAllTokens() {
   if (typeof window !== 'undefined') sessionStorage.removeItem(SESSION_KEY)
 }
 
+// ── Dev tools (development only) ──────────────────────────────────────────────
+
+export const devApi = {
+  seed: () => apiFetch<{ debtId: string; inviteUrl: string }>('/dev/seed', {
+    method: 'POST',
+  }),
+}
+
 // ── Utilities ─────────────────────────────────────────────────────────────────
+
+/** Decode a JWT payload without verification — for display only. */
+export function decodeTokenPayload(): { email?: string; kycStatus?: string } | null {
+  const token = getAccessToken()
+  if (!token) return null
+  try {
+    const payload = token.split('.')[1]
+    if (!payload) return null
+    return JSON.parse(atob(payload))
+  } catch {
+    return null
+  }
+}
 
 export function formatPence(pence: number): string {
   return new Intl.NumberFormat('en-GB', {

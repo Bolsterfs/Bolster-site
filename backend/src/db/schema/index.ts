@@ -81,8 +81,8 @@ export const users = pgTable('users', {
   lastName:     text('last_name').notNull(),
   passwordHash: text('password_hash').notNull(),
   kycStatus:    kycStatusEnum('kyc_status').notNull().default('pending'),
-  kycApplicantId: text('kyc_applicant_id'),    // Onfido applicant ID
-  kycCheckId:   text('kyc_check_id'),           // Onfido check ID
+  kycApplicantId: text('kyc_applicant_id'),    // Veriff session ID
+  kycCheckId:   text('kyc_check_id'),           // Veriff verification ID
   isActive:     boolean('is_active').notNull().default(true),
   createdAt:    timestamp('created_at').notNull().defaultNow(),
   updatedAt:    timestamp('updated_at').notNull().defaultNow(),

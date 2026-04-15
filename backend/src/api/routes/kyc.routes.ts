@@ -12,8 +12,8 @@ import type { JwtPayload } from '../../types/index.js'
 export async function kycRoutes(app: FastifyInstance) {
 
   // ── POST /api/v1/kyc/initiate ─────────────────────────────────────────────
-  // Creates Onfido applicant (if not already) and returns an SDK token.
-  // Frontend uses the token to mount the Onfido SDK widget.
+  // Creates a Veriff session and returns the session URL.
+  // Frontend redirects the user to the Veriff hosted verification flow.
   app.post(
     '/initiate',
     {
@@ -44,53 +44,15 @@ export async function kycRoutes(app: FastifyInstance) {
       return reply.send({
         success: true,
         data: {
-          sdkToken:    result.value.sdkToken,
-          applicantId: result.value.applicantId,
-        },
-      })
-    },
-  )
-
-  // ── POST /api/v1/kyc/submit ───────────────────────────────────────────────
-  // Called by the frontend after the user completes the Onfido SDK flow.
-  // Submits the check to Onfido — result arrives asynchronously via webhook.
-  app.post(
-    '/submit',
-    { preHandler: [authenticate] },
-    async (request, reply) => {
-      const user = request.user as JwtPayload
-
-      if (user.kycStatus === 'approved') {
-        return reply.status(400).send({
-          success: false,
-          error:   'Identity already verified',
-          code:    'KYC_ALREADY_APPROVED',
-        })
-      }
-
-      const result = await kycService.submitCheck(user.sub)
-
-      if (!result.ok) {
-        app.log.error({ userId: user.sub, error: result.error.message }, 'KYC check submission failed')
-        return reply.status(500).send({
-          success: false,
-          error:   'Could not submit verification check. Please try again.',
-        })
-      }
-
-      return reply.send({
-        success: true,
-        data: {
-          checkId: result.value.id,
-          // Result is async — frontend should poll /kyc/status or wait for push
-          message: 'Verification submitted. We will notify you once the check is complete.',
+          sessionUrl: result.value.sessionUrl,
+          sessionId:  result.value.sessionId,
         },
       })
     },
   )
 
   // ── POST /api/v1/kyc/dev-approve — DEV ONLY ──────────────────────────────
-  // Immediately marks the user as KYC approved without Onfido.
+  // Immediately marks the user as KYC approved without Veriff.
   // Only registered when NODE_ENV=development — never reachable in production.
   if (env.NODE_ENV === 'development') {
     app.post('/dev-approve', { preHandler: [authenticate] }, async (request, reply) => {
@@ -139,7 +101,7 @@ export async function kycRoutes(app: FastifyInstance) {
 
   // ── GET /api/v1/kyc/status ────────────────────────────────────────────────
   // Returns the current KYC status for the logged-in user.
-  // Frontend polls this after submit to know when to unblock the dashboard.
+  // Frontend polls this after Veriff redirect to know when to unblock the dashboard.
   app.get(
     '/status',
     { preHandler: [authenticate] },
@@ -161,8 +123,8 @@ export async function kycRoutes(app: FastifyInstance) {
       return reply.send({
         success: true,
         data: {
-          kycStatus:    dbUser.kycStatus,
-          hasApplicant: !!dbUser.kycApplicantId,
+          kycStatus:  dbUser.kycStatus,
+          hasSession: !!dbUser.kycApplicantId,
         },
       })
     },

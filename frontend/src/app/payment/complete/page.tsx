@@ -49,10 +49,10 @@ function PaymentCompleteContent() {
     poll()
   }, [paymentId, polls])
 
-  // Re-poll every 3 seconds while pending (max 10 polls = 30 seconds)
+  // Re-poll every 5 seconds while pending (max 6 polls = 30 seconds)
   useEffect(() => {
-    if (status?.status === 'pending' && polls < 10) {
-      const timer = setTimeout(() => setPolls((p) => p + 1), 3000)
+    if (status?.status === 'pending' && polls < 6) {
+      const timer = setTimeout(() => setPolls((p) => p + 1), 5000)
       return () => clearTimeout(timer)
     }
   }, [status, polls])
@@ -120,7 +120,7 @@ function PaymentCompleteContent() {
           </>
         )}
 
-        {status?.status === 'pending' && polls >= 10 && (
+        {status?.status === 'pending' && polls >= 6 && (
           <>
             <h1 className="text-2xl font-bold text-white mb-3">Payment is processing</h1>
             <p className="text-mid-gray">

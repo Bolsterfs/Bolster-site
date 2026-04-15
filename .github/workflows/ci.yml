@@ -65,8 +65,8 @@ jobs:
           TRUELAYER_WEBHOOK_SECRET: test-webhook-secret
           TRUELAYER_AUTH_URL:    https://auth.truelayer-sandbox.com
           TRUELAYER_API_URL:     https://api.truelayer-sandbox.com
-          ONFIDO_API_TOKEN:      test-onfido-token
-          ONFIDO_WEBHOOK_TOKEN:  test-onfido-webhook
+          VERIFF_API_KEY:        test-veriff-api-key
+          VERIFF_SECRET_KEY:     test-veriff-secret-key
           COMPLY_ADVANTAGE_API_KEY: test-ca-key
           SENDGRID_API_KEY:      test-sg-key
           SENDGRID_FROM_EMAIL:   test@bolster.io

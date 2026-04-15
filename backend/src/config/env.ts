@@ -24,10 +24,14 @@ const envSchema = z.object({
   TRUELAYER_AUTH_URL: z.string().url(),
   TRUELAYER_API_URL: z.string().url(),
 
-  // Onfido
-  ONFIDO_API_TOKEN: z.string().min(1),
-  ONFIDO_WEBHOOK_TOKEN: z.string().min(1),
-  ONFIDO_REGION: z.enum(['EU', 'US', 'CA']).default('EU'),
+  // Veriff
+  VERIFF_API_KEY: z.string().min(1),
+  VERIFF_SECRET_KEY: z.string().min(1),
+
+  // Stripe (fallback when TrueLayer is disabled or fails)
+  STRIPE_SECRET_KEY:      z.string().min(1).optional(),
+  STRIPE_PUBLISHABLE_KEY: z.string().min(1).optional(),
+  STRIPE_WEBHOOK_SECRET:  z.string().min(1).optional(),
 
   // Comply Advantage
   COMPLY_ADVANTAGE_API_KEY: z.string().min(1),

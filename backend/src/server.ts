@@ -11,6 +11,7 @@ import { kycRoutes } from './api/routes/kyc.routes.js'
 import { paymentRoutes } from './api/routes/payment.routes.js'
 import { webhookRoutes } from './api/routes/webhook.routes.js'
 import { healthRoutes } from './api/routes/health.routes.js'
+import { devRoutes } from './api/routes/dev.routes.js'
 
 const server = Fastify({
   logger: {
@@ -55,6 +56,10 @@ await server.register(kycRoutes,     { prefix: '/api/v1/kyc' })
 await server.register(inviteRoutes,  { prefix: '/api/v1/invites' })
 await server.register(paymentRoutes, { prefix: '/api/v1/payments' })
 await server.register(webhookRoutes, { prefix: '/webhooks' })  // no auth — signature verified per-handler
+
+if (env.NODE_ENV === 'development') {
+  await server.register(devRoutes, { prefix: '/api/v1/dev' })
+}
 
 // ── Error handler ─────────────────────────────────────────────────────────────
 

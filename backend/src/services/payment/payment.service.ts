@@ -2,6 +2,7 @@ import { eq, sql } from 'drizzle-orm'
 import { db } from '../../db/client.js'
 import { payments, debts, invites } from '../../db/schema/index.js'
 import { truelayerService } from './truelayer.js'
+import { stripeService } from './stripe.service.js'
 import { amlService } from '../aml/aml.service.js'
 import { calculateFee, validatePaymentAmount } from '../../utils/fees.js'
 import { writeAuditEvent } from '../../utils/audit.js'
@@ -9,10 +10,11 @@ import { inviteService } from '../invite/invite.service.js'
 import type { InitiatePaymentInput, Result } from '../../types/index.js'
 import { ok, err } from '../../types/index.js'
 import { env } from '../../config/env.js'
+import type { Payment } from '../../db/schema/index.js'
 
 export interface PaymentInitiationResult {
   paymentId:   string
-  authUri:     string       // redirect contributor here for SCA
+  authUri:     string       // redirect contributor here for SCA / Stripe Checkout
   feeAmountPence: number
   grossAmountPence: number
   netAmountPence: number
@@ -24,11 +26,12 @@ export class PaymentService {
    * 1. Validate invite and payment amount
    * 2. AML screen the contributor
    * 3. Calculate fees
-   * 4. Initiate payment via TrueLayer PIS
-   * 5. Write payment record + audit log
+   * 4. Create payment record
+   * 5. Initiate payment via TrueLayer PIS (or Stripe fallback)
    *
-   * Money flow: contributor's bank → TrueLayer → Faster Payments → creditor
-   * Bolster NEVER holds funds in this flow.
+   * Money flow (TrueLayer): contributor's bank → Faster Payments → creditor
+   * Money flow (Stripe):    contributor's card → Stripe → Bolster → creditor
+   * TrueLayer is preferred because Bolster never holds funds in that path.
    */
   async initiatePayment(
     input:      InitiatePaymentInput,
@@ -121,16 +124,13 @@ export class PaymentService {
       ipAddress,
     })
 
-    // ── Step 5: Initiate via TrueLayer PIS ────────────────────────────────
+    // ── Step 5: Initiate payment ──────────────────────────────────────────
+    //
+    // When TrueLayer PIS is disabled → go straight to Stripe.
+    // When TrueLayer PIS is enabled  → try TrueLayer first, fall back to
+    //                                   Stripe if it fails.
     if (!env.ENABLE_PAYMENT_INITIATION) {
-      // Sandbox mode — return a mock auth URI
-      return ok({
-        paymentId:        payment.id,
-        authUri:          `${env.APP_URL}/payment/sandbox-complete?payment_id=${payment.id}`,
-        feeAmountPence:   fees.feeAmountPence,
-        grossAmountPence: fees.grossAmountPence,
-        netAmountPence:   fees.netAmountPence,
-      })
+      return this.initiateViaStripe(payment, debt.creditorName, input.inviteToken, fees)
     }
 
     const tlResult = await truelayerService.initiatePayment({
@@ -148,7 +148,15 @@ export class PaymentService {
     })
 
     if (!tlResult.ok) {
-      // Mark payment as failed
+      // TrueLayer failed — try Stripe as fallback before giving up
+      if (env.STRIPE_SECRET_KEY) {
+        const stripeResult = await this.initiateViaStripe(
+          payment, debt.creditorName, input.inviteToken, fees,
+        )
+        if (stripeResult.ok) return stripeResult
+      }
+
+      // Both providers failed — mark payment as failed
       await db
         .update(payments)
         .set({ status: 'failed', updatedAt: new Date() })
@@ -198,34 +206,59 @@ export class PaymentService {
     })
   }
 
-  /**
-   * Handle a TrueLayer webhook for payment settlement.
-   * Called by the webhook route after signature verification.
-   */
-  async handlePaymentSettled(truelayerPaymentId: string): Promise<void> {
-    const payment = await db.query.payments.findFirst({
-      where: eq(payments.truelayerPaymentId, truelayerPaymentId),
+  // ── Stripe fallback ───────────────────────────────────────────────────────
+
+  private async initiateViaStripe(
+    payment:       Payment,
+    creditorName:  string,
+    inviteToken:   string,
+    fees:          { feeAmountPence: number; grossAmountPence: number; netAmountPence: number },
+  ): Promise<Result<PaymentInitiationResult>> {
+    const stripeResult = await stripeService.createCheckoutSession({
+      grossAmountPence: fees.grossAmountPence,
+      creditorName,
+      bolsterPaymentId: payment.id,
+      inviteToken,
+      successUrl: `${env.APP_URL}/payment/complete?payment_id=${payment.id}`,
+      cancelUrl:  `${env.APP_URL}/invite/${inviteToken}`,
     })
 
-    if (!payment) {
-      console.error(`Payment not found for TrueLayer ID: ${truelayerPaymentId}`)
-      return
-    }
+    if (!stripeResult.ok) return err(stripeResult.error)
 
+    await db
+      .update(payments)
+      .set({ status: 'pending', updatedAt: new Date() })
+      .where(eq(payments.id, payment.id))
+
+    return ok({
+      paymentId:        payment.id,
+      authUri:          stripeResult.value.sessionUrl,
+      feeAmountPence:   fees.feeAmountPence,
+      grossAmountPence: fees.grossAmountPence,
+      netAmountPence:   fees.netAmountPence,
+    })
+  }
+
+  // ── Settlement (shared by both TrueLayer and Stripe webhooks) ─────────────
+
+  /**
+   * Core settlement logic — updates payment, debt balance, and audit log.
+   * Called by both handleTruelayerSettled and handleStripeSettled.
+   */
+  private async settlePayment(payment: Payment, provider: string): Promise<void> {
     const now = new Date()
 
-    // Mark payment as settled
     await db
       .update(payments)
       .set({
-        status:                    'settled',
-        settledAt:                 now,
-        consumerDutyRecordedAt:    now,   // consumer duty outcome recorded at settlement
-        updatedAt:                 now,
+        status:                 'settled',
+        settledAt:              now,
+        consumerDutyRecordedAt: now,
+        updatedAt:              now,
       })
       .where(eq(payments.id, payment.id))
 
-    // Update debt balance — atomic increment so concurrent payments are safe
+    // Atomic increment so concurrent payments are safe
     await db
       .update(debts)
       .set({
@@ -245,7 +278,6 @@ export class PaymentService {
         .set({ status: 'resolved', updatedAt: now })
         .where(eq(debts.id, debt.id))
 
-      // Mark invite as fully paid
       await db
         .update(invites)
         .set({ status: 'fully_paid', updatedAt: now })
@@ -258,9 +290,9 @@ export class PaymentService {
       entityId:   payment.id,
       userId:     payment.recipientUserId,
       actorType:  'webhook',
-      actorId:    'truelayer',
+      actorId:    provider,
       metadata:   {
-        truelayerPaymentId,
+        provider,
         netAmountPence: payment.netAmountPence,
         settledAt:      now.toISOString(),
       },
@@ -279,6 +311,48 @@ export class PaymentService {
         recordedAt:     now.toISOString(),
       },
     })
+  }
+
+  /**
+   * Handle a TrueLayer webhook for payment settlement.
+   */
+  async handlePaymentSettled(truelayerPaymentId: string): Promise<void> {
+    const payment = await db.query.payments.findFirst({
+      where: eq(payments.truelayerPaymentId, truelayerPaymentId),
+    })
+
+    if (!payment) {
+      console.error(`Payment not found for TrueLayer ID: ${truelayerPaymentId}`)
+      return
+    }
+
+    await this.settlePayment(payment, 'truelayer')
+  }
+
+  /**
+   * Handle a Stripe checkout.session.completed webhook.
+   * Looks up payment by our own ID (stored in Stripe session metadata).
+   */
+  async handleStripeSettled(bolsterPaymentId: string): Promise<void> {
+    console.log(`[Stripe] checkout.session.completed received for payment ${bolsterPaymentId}`)
+
+    const payment = await db.query.payments.findFirst({
+      where: eq(payments.id, bolsterPaymentId),
+    })
+
+    if (!payment) {
+      console.error(`[Stripe] Payment not found for Bolster ID: ${bolsterPaymentId}`)
+      return
+    }
+
+    if (payment.status === 'settled') {
+      console.log(`[Stripe] Payment ${bolsterPaymentId} already settled — skipping`)
+      return // idempotent — already settled
+    }
+
+    console.log(`[Stripe] Settling payment ${bolsterPaymentId} (${payment.netAmountPence}p net)`)
+    await this.settlePayment(payment, 'stripe')
+    console.log(`[Stripe] Payment ${bolsterPaymentId} settled successfully`)
   }
 }
 

@@ -17,7 +17,7 @@ TrueLayer PIS → UK Faster Payments → creditor account in ~90 seconds.
 - **Queue**: BullMQ + Redis
 - **Frontend**: Next.js 14 (PWA, mobile-first)
 - **Open banking**: TrueLayer (PIS + AIS) — primary; Yapily fallback
-- **KYC**: Onfido (document + liveness, ~£1–3/check)
+- **KYC**: Veriff (document + liveness, ~£1–3/check)
 - **AML**: Comply Advantage (sanctions + PEP screening)
 - **Infrastructure**: AWS eu-west-2 (London), ECS Fargate, CloudFront
 
@@ -35,7 +35,7 @@ bolster/
 │       │   └── migrations/      # SQL migration files
 │       ├── services/
 │       │   ├── payment/         # TrueLayer PIS integration
-│       │   ├── kyc/             # Onfido integration
+│       │   ├── kyc/             # Veriff integration
 │       │   ├── aml/             # Comply Advantage integration
 │       │   ├── invite/          # Invite generation + management
 │       │   └── notification/    # Email + SMS notifications
@@ -64,7 +64,7 @@ bolster/
 ## Critical business rules — NEVER violate these
 1. **Money routing**: contributor → TrueLayer PIS → Faster Payments → creditor ONLY
    Bolster NEVER holds funds. No Bolster bank account in the payment path.
-2. **KYC gate**: Recipients MUST pass Onfido verification before creating any invite
+2. **KYC gate**: Recipients MUST pass Veriff verification before creating any invite
 3. **AML screening**: ALL contributors screened via Comply Advantage before payment initiation
 4. **Sanctions**: Real-time UK sanctions list + PEP check on all parties
 5. **Audit log**: Every payment event written to audit_log table — IMMUTABLE, never update/delete
@@ -113,5 +113,5 @@ bolster/
 - All data in AWS eu-west-2 (London) — UK data residency
 
 ## Environment variables (see .env.example)
-Database, Redis, TrueLayer, Onfido, Comply Advantage, JWT secrets,
+Database, Redis, TrueLayer, Veriff, Comply Advantage, JWT secrets,
 AWS credentials, SendGrid (email), Twilio (SMS)

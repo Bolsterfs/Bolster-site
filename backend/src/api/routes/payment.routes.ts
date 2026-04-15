@@ -53,9 +53,13 @@ export async function paymentRoutes(app: FastifyInstance) {
   )
 
   // ── GET /api/v1/payments/:id — PUBLIC — payment status check ─────────────
-  // Called after contributor returns from SCA to show confirmation screen
+  // Called after contributor returns from SCA to show confirmation screen.
+  // Higher rate limit because the confirmation page polls this endpoint.
   app.get<{ Params: { id: string } }>(
     '/:id/status',
+    {
+      config: { rateLimit: { max: 20, timeWindow: '1 minute' } },
+    },
     async (request, reply) => {
       const payment = await db.query.payments.findFirst({
         where: eq(payments.id, request.params.id),

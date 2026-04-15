@@ -84,25 +84,50 @@ export class TruelayerPaymentService {
     try {
       const token = await this.getAccessToken()
 
-      const body = {
-        amount_in_minor: request.amountInMinor,
-        currency:        request.currency,
-        payment_method: {
-          type:   'bank_transfer',
-          beneficiary: {
-            type:           'external_account',
+      const providerSelection = {
+        type: 'user_selected',
+        filter: {
+          countries:         ['GB'],
+          release_channel:   'general_availability',
+          customer_segments: ['retail'],
+        },
+      }
+
+      const beneficiary = env.NODE_ENV === 'development'
+        ? {
+            type:                'external_account',
+            account_holder_name: 'TrueLayer Sandbox',
+            reference:           'Bolster Test',
+            account_identifier: {
+              type:           'sort_code_account_number',
+              sort_code:      '040004',
+              account_number: '00000000',
+            },
+          }
+        : {
+            type:                'external_account',
             account_holder_name: request.beneficiaryName,
-            reference:      request.paymentReference,
+            reference:           request.paymentReference,
             account_identifier: {
               type:           'sort_code_account_number',
               sort_code:      request.beneficiarySortCode,
               account_number: request.beneficiaryAccount,
             },
-          },
+          }
+
+      const body = {
+        amount_in_minor: request.amountInMinor,
+        currency:        request.currency,
+        payment_method: {
+          type:               'bank_transfer',
+          provider_selection: providerSelection,
+          beneficiary,
         },
         return_uri: request.returnUri,
         metadata:   request.metadata ?? {},
       }
+
+      console.log(JSON.stringify(body, null, 2))
 
       const response = await fetch(`${env.TRUELAYER_API_URL}/payments`, {
         method:  'POST',
