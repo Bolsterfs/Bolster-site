@@ -9,8 +9,8 @@ const pool = new Pool({
   max: 10,
   idleTimeoutMillis: 30_000,
   connectionTimeoutMillis: 5_000,
-  // SSL required in production (RDS)
-  ssl: env.NODE_ENV === 'production' ? { rejectUnauthorized: true } : false,
+  // SSL required in production (Railway / RDS)
+  ssl: env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 })
 
 pool.on('error', (err) => {
