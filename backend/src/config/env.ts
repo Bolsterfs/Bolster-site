@@ -1,6 +1,11 @@
 import { z } from 'zod'
 import 'dotenv/config'
 
+console.log('ENV DEBUG:', JSON.stringify({
+  REDIS_URL: process.env.REDIS_URL,
+  NODE_ENV: process.env.NODE_ENV,
+}))
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 
