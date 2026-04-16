@@ -7,8 +7,8 @@ const envSchema = z.object({
   // Database
   DATABASE_URL: z.string().url(),
 
-  // Redis
-  REDIS_URL: z.string().url(),
+  // Redis (optional — server starts without it, but background jobs are disabled)
+  REDIS_URL: z.string().url().optional().default('redis://localhost:6379'),
 
   // JWT
   JWT_ACCESS_SECRET: z.string().min(32),
