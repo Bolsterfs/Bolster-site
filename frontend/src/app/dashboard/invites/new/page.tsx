@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { debtApi, inviteApi } from '../../../../lib/api'
@@ -42,6 +42,18 @@ const MAX_MESSAGE_LENGTH = 500
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function NewInvitePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-navy flex items-center justify-center">
+        <div className="text-mid-gray animate-pulse">Loading…</div>
+      </div>
+    }>
+      <NewInviteContent />
+    </Suspense>
+  )
+}
+
+function NewInviteContent() {
   const router       = useRouter()
   const searchParams = useSearchParams()
   const { isChecking } = useRequireAuth()
