@@ -1,11 +1,6 @@
 import { z } from 'zod'
 import 'dotenv/config'
 
-console.log('ENV DEBUG:', JSON.stringify({
-  REDIS_URL: process.env.REDIS_URL,
-  NODE_ENV: process.env.NODE_ENV,
-}))
-
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 
@@ -13,7 +8,10 @@ const envSchema = z.object({
   DATABASE_URL: z.string().url(),
 
   // Redis (optional — server starts without it, but background jobs are disabled)
-  REDIS_URL: z.string().url().optional().default('redis://localhost:6379'),
+  // Handles undefined, null, and empty string "" from Railway env config
+  REDIS_URL: z.string().optional().transform(v =>
+    (v && v.trim() !== '') ? v : 'redis://localhost:6379'
+  ).pipe(z.string().url()).default('redis://localhost:6379'),
 
   // JWT
   JWT_ACCESS_SECRET: z.string().min(32),
