@@ -259,6 +259,9 @@ export const devApi = {
   seed: () => apiFetch<{ debtId: string; inviteUrl: string }>('/dev/seed', {
     method: 'POST',
   }),
+  approveKyc: () => apiFetch<{ kycStatus: string }>('/dev/approve-kyc', {
+    method: 'POST',
+  }),
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────

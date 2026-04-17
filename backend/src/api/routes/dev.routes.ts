@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
 import { eq, and } from 'drizzle-orm'
 import { db } from '../../db/client.js'
-import { debts, invites } from '../../db/schema/index.js'
+import { debts, invites, users } from '../../db/schema/index.js'
 import { authenticate } from '../hooks/auth.hook.js'
 import { generateInviteToken } from '../../services/invite/invite.service.js'
 import { env } from '../../config/env.js'
@@ -99,5 +99,18 @@ export async function devRoutes(app: FastifyInstance) {
         inviteUrl,
       },
     })
+  })
+
+  // ── POST /api/v1/dev/approve-kyc ──────────────────────────────────────────
+  // Bypasses Veriff and sets the current user's KYC status to approved.
+  app.post('/approve-kyc', { preHandler: [authenticate] }, async (request, reply) => {
+    const user = request.user as JwtPayload
+
+    await db
+      .update(users)
+      .set({ kycStatus: 'approved', updatedAt: new Date() })
+      .where(eq(users.id, user.sub))
+
+    return reply.send({ success: true, data: { kycStatus: 'approved' } })
   })
 }

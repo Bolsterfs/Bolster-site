@@ -48,6 +48,25 @@ export default function DevTools() {
     }
   }
 
+  async function handleApproveKyc() {
+    if (!getAccessToken()) {
+      setMsg('Login first')
+      return
+    }
+    setBusy('kyc')
+    setMsg(null)
+    const result = await devApi.approveKyc()
+    setBusy(null)
+
+    if (!result.ok) {
+      setMsg(result.error)
+      return
+    }
+
+    setTokenInfo((prev) => prev ? { ...prev, kycStatus: 'approved' } : prev)
+    setMsg('KYC approved')
+  }
+
   async function handleSeed() {
     if (!getAccessToken()) {
       setMsg('Login first')
@@ -129,6 +148,16 @@ export default function DevTools() {
               className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-medium py-2 px-3 rounded-lg transition-colors"
             >
               {busy === 'login' ? 'Logging in...' : 'Auto-login as Test User'}
+            </button>
+
+            {/* Approve KYC */}
+            <button
+              type="button"
+              onClick={() => void handleApproveKyc()}
+              disabled={busy === 'kyc'}
+              className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-xs font-medium py-2 px-3 rounded-lg transition-colors"
+            >
+              {busy === 'kyc' ? 'Approving...' : 'Approve KYC'}
             </button>
 
             {/* Seed data */}
