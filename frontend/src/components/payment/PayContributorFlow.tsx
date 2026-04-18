@@ -2,16 +2,17 @@
 
 import { useState } from 'react'
 import { paymentApi, formatPence } from '../../lib/api'
-import type { ResolvedInvite } from '../../lib/api'
+import type { ResolvedInvite, ResolvedInviteDebt } from '../../lib/api'
 
 interface Props {
   inviteToken: string
   invite:      ResolvedInvite
+  selectedDebt: ResolvedInviteDebt
 }
 
 type Step = 'amount' | 'details' | 'confirm' | 'redirecting' | 'error'
 
-export default function PayContributorFlow({ inviteToken, invite }: Props) {
+export default function PayContributorFlow({ inviteToken, invite, selectedDebt }: Props) {
   const [step,            setStep]           = useState<Step>('amount')
   const [amountPounds,    setAmountPounds]   = useState('')
   const [contributorName, setContributorName] = useState('')
@@ -26,12 +27,12 @@ export default function PayContributorFlow({ inviteToken, invite }: Props) {
 
   const amountPence = Math.round(parseFloat(amountPounds || '0') * 100)
 
-  const maxAmountPounds = invite.debt.inviteMaxAmountPence
-    ? invite.debt.inviteMaxAmountPence / 100
+  const maxAmountPounds = invite.inviteMaxAmountPence
+    ? invite.inviteMaxAmountPence / 100
     : null
 
-  const remainingPounds = invite.debt.remainingAmountPence
-    ? invite.debt.remainingAmountPence / 100
+  const remainingPounds = selectedDebt.remainingAmountPence
+    ? selectedDebt.remainingAmountPence / 100
     : null
 
   // ── Step 1: amount entry ──────────────────────────────────────────────────
@@ -42,7 +43,7 @@ export default function PayContributorFlow({ inviteToken, invite }: Props) {
       return
     }
     if (maxAmountPounds && parseFloat(amountPounds) > maxAmountPounds) {
-      setError(`Maximum contribution is ${formatPence(invite.debt.inviteMaxAmountPence!)}`)
+      setError(`Maximum contribution is ${formatPence(invite.inviteMaxAmountPence!)}`)
       return
     }
     setStep('details')
@@ -69,6 +70,7 @@ export default function PayContributorFlow({ inviteToken, invite }: Props) {
 
     const result = await paymentApi.initiate({
       inviteToken,
+      debtId: selectedDebt.id,
       amountPence,
       contributorEmail: contributorEmail.trim(),
       contributorName:  contributorName.trim(),
@@ -221,7 +223,7 @@ export default function PayContributorFlow({ inviteToken, invite }: Props) {
             <div className="flex justify-between py-3 border-b border-blue-900/40">
               <span className="text-mid-gray">Payment to</span>
               <span className="text-white font-medium">
-                {invite.debt.creditorName ?? 'Creditor'}
+                {selectedDebt.creditorName ?? 'Creditor'}
               </span>
             </div>
             <div className="flex justify-between py-3 border-b border-blue-900/40">
@@ -246,7 +248,7 @@ export default function PayContributorFlow({ inviteToken, invite }: Props) {
           <div className="bg-navy rounded-lg p-4 mb-5 border border-blue-900/30">
             <p className="text-xs text-mid-gray leading-relaxed">
               You&apos;ll be redirected to your bank to authorise this payment securely.
-              Money goes directly to {invite.debt.creditorName ?? 'the creditor'} via UK Faster Payments.
+              Money goes directly to {selectedDebt.creditorName ?? 'the creditor'} via UK Faster Payments.
               Bolster never holds your funds.
             </p>
           </div>

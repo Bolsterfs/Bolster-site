@@ -155,24 +155,27 @@ export interface Invite {
   createdAt:      string
 }
 
+export interface ResolvedInviteDebt {
+  id:                    string
+  creditorName?:         string
+  remainingAmountPence?: number
+}
+
 export interface ResolvedInvite {
-  inviteId:           string
-  privacyLevel:       string
-  personalMessage?:   string
-  recipientFirstName: string
-  debt: {
-    creditorName?:        string
-    remainingAmountPence?: number
-    inviteMaxAmountPence?: number
-  }
-  expiresAt: string
+  inviteId:              string
+  privacyLevel:          string
+  personalMessage?:      string
+  recipientFirstName:    string
+  debts:                 ResolvedInviteDebt[]
+  inviteMaxAmountPence?: number
+  expiresAt:             string
 }
 
 export const inviteApi = {
   list: () => apiFetch<Invite[]>('/invites'),
 
   create: (data: {
-    debtId:          string
+    debtId?:         string
     privacyLevel:    'amount_only' | 'creditor_name' | 'full_balance'
     personalMessage?: string
     maxAmountPence?:  number
@@ -211,6 +214,7 @@ export interface PaymentStatus {
 export const paymentApi = {
   initiate: (data: {
     inviteToken:      string
+    debtId:           string
     amountPence:      number
     contributorEmail: string
     contributorName:  string
