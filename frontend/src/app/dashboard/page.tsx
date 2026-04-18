@@ -115,57 +115,55 @@ export default function DashboardPage() {
                 action={{ label: 'Link a debt', href: '/dashboard/debts/new' }}
               />
             ) : (
-              debts.map((debt) => (
-                <div key={debt.id} className="card">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <p className="font-semibold text-white">{debt.creditorName}</p>
-                      <p className="text-xs text-mid-gray mt-0.5">
-                        {!debt.copVerified && (
-                          <span className="text-yellow-400">⏳ Verifying account… </span>
-                        )}
-                        Added {new Date(debt.createdAt).toLocaleDateString('en-GB')}
-                      </p>
+              <>
+                <Link
+                  href="/dashboard/invites/new"
+                  className="text-sm py-3 block text-center w-full rounded-lg font-semibold transition-colors mb-2"
+                  style={{ backgroundColor: '#f97316', color: 'white' }}
+                >
+                  Create invite link →
+                </Link>
+
+                {debts.map((debt) => (
+                  <div key={debt.id} className="card">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <p className="font-semibold text-white">{debt.creditorName}</p>
+                        <p className="text-xs text-mid-gray mt-0.5">
+                          {!debt.copVerified && (
+                            <span className="text-yellow-400">⏳ Verifying account… </span>
+                          )}
+                          Added {new Date(debt.createdAt).toLocaleDateString('en-GB')}
+                        </p>
+                      </div>
+                      <StatusBadge status={debt.status} />
                     </div>
-                    <StatusBadge status={debt.status} />
+
+                    {/* Progress bar */}
+                    <div className="mt-3">
+                      <div className="flex justify-between text-xs text-mid-gray mb-1">
+                        <span>Paid: {formatPence(debt.paidAmountPence)}</span>
+                        <span>Total: {formatPence(debt.totalAmountPence)}</span>
+                      </div>
+                      <div className="h-1.5 bg-blue-900/60 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-teal-500 rounded-full transition-all"
+                          style={{
+                            width: `${Math.min(100, (debt.paidAmountPence / debt.totalAmountPence) * 100)}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
                   </div>
+                ))}
 
-                  {/* Progress bar */}
-                  <div className="mt-3">
-                    <div className="flex justify-between text-xs text-mid-gray mb-1">
-                      <span>Paid: {formatPence(debt.paidAmountPence)}</span>
-                      <span>Total: {formatPence(debt.totalAmountPence)}</span>
-                    </div>
-                    <div className="h-1.5 bg-blue-900/60 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-teal-500 rounded-full transition-all"
-                        style={{
-                          width: `${Math.min(100, (debt.paidAmountPence / debt.totalAmountPence) * 100)}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {debt.status !== 'pending' && (
-                    <Link
-                      href={`/dashboard/invites/new?debtId=${debt.id}`}
-                      className="mt-3 text-sm py-2 inline-block text-center w-full rounded-lg font-semibold transition-colors"
-                      style={{ backgroundColor: '#f97316', color: 'white' }}
-                    >
-                      Create invite →
-                    </Link>
-                  )}
-                </div>
-              ))
-            )}
-
-            {debts.length > 0 && (
-              <Link
-                href="/dashboard/debts/new"
-                className="btn-secondary text-sm py-2 block text-center w-full"
-              >
-                + Link another debt
-              </Link>
+                <Link
+                  href="/dashboard/debts/new"
+                  className="btn-secondary text-sm py-2 block text-center w-full"
+                >
+                  + Link another debt
+                </Link>
+              </>
             )}
           </div>
         )}
