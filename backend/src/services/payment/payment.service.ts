@@ -46,7 +46,13 @@ export class PaymentService {
     )
     if (!inviteResult.ok) return err(inviteResult.error)
 
-    const { invite, debt } = inviteResult.value
+    const { invite, debts: eligibleDebts } = inviteResult.value
+
+    // Resolve the debt the contributor selected
+    const debt = eligibleDebts.find(d => d.id === input.debtId)
+    if (!debt) {
+      return err(new Error('Selected debt is not available for this invite'))
+    }
 
     // Validate payment amount against invite constraints
     try {

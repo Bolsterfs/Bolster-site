@@ -27,31 +27,31 @@ export async function inviteRoutes(app: FastifyInstance) {
         })
       }
 
-      const { invite, debt, recipient } = result.value
+      const { invite, debts: eligibleDebts, recipient } = result.value
 
-      // Return only what the privacy level permits — never over-expose
-      const publicDebtData = {
+      // Filter debt data based on privacy level — never over-expose
+      const publicDebts = eligibleDebts.map((d) => ({
+        id: d.id,
         creditorName:
           invite.privacyLevel !== 'amount_only'
-            ? debt.creditorName
+            ? d.creditorName
             : undefined,
         remainingAmountPence:
           invite.privacyLevel === 'full_balance'
-            ? debt.totalAmountPence - debt.paidAmountPence
+            ? d.totalAmountPence - d.paidAmountPence
             : undefined,
-        // Always show the amount the invite is for
-        inviteMaxAmountPence: invite.maxAmountPence,
-      }
+      }))
 
       return reply.send({
         success: true,
         data: {
-          inviteId:        invite.id,
-          privacyLevel:    invite.privacyLevel,
-          personalMessage: invite.personalMessage,
+          inviteId:           invite.id,
+          privacyLevel:       invite.privacyLevel,
+          personalMessage:    invite.personalMessage,
           recipientFirstName: recipient.firstName,
-          debt:            publicDebtData,
-          expiresAt:       invite.expiresAt,
+          debts:              publicDebts,
+          inviteMaxAmountPence: invite.maxAmountPence,
+          expiresAt:          invite.expiresAt,
         },
       })
     },

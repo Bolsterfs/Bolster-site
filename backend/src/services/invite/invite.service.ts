@@ -10,7 +10,8 @@ import { writeAuditEvent } from '../../utils/audit.js'
 
 export interface InviteWithContext {
   invite:    Invite
-  debt:      Debt
+  debt:      Debt | null              // null for user-level invites
+  debts:     Debt[]                   // all eligible debts for user-level invites
   recipient: Pick<User, 'firstName' | 'lastName'>
 }
 
@@ -94,20 +95,22 @@ export class InviteService {
       ))
     }
 
-    // Verify debt belongs to this user
-    const debt = await db.query.debts.findFirst({
-      where: and(
-        eq(debts.id, input.debtId),
-        eq(debts.userId, userId),
-      ),
-    })
+    // If a specific debt is provided, verify it belongs to this user
+    if (input.debtId) {
+      const debt = await db.query.debts.findFirst({
+        where: and(
+          eq(debts.id, input.debtId),
+          eq(debts.userId, userId),
+        ),
+      })
 
-    if (!debt) {
-      return err(new Error('Debt not found or does not belong to you'))
-    }
+      if (!debt) {
+        return err(new Error('Debt not found or does not belong to you'))
+      }
 
-    if (debt.status === 'resolved') {
-      return err(new Error('This debt has already been resolved'))
+      if (debt.status === 'resolved') {
+        return err(new Error('This debt has already been resolved'))
+      }
     }
 
     // Calculate expiry
@@ -120,7 +123,7 @@ export class InviteService {
       .values({
         token:           'pending', // temporary — updated below
         userId,
-        debtId:          input.debtId,
+        debtId:          input.debtId ?? null,
         privacyLevel:    input.privacyLevel,
         personalMessage: input.personalMessage ?? null,
         maxAmountPence:  input.maxAmountPence  ?? null,
@@ -198,16 +201,36 @@ export class InviteService {
       return err(new Error('This invite has expired'))
     }
 
-    // Fetch debt and recipient context
-    const debt = await db.query.debts.findFirst({
-      where: eq(debts.id, invite.debtId),
-    })
+    // Fetch recipient
     const user = await db.query.users.findFirst({
       where: eq(users.id, invite.userId),
     })
 
-    if (!debt || !user) {
+    if (!user) {
       return err(new Error('Invite data incomplete'))
+    }
+
+    // Fetch debt context: single debt if invite is debt-specific,
+    // otherwise all active verified debts for the user
+    let debt: Debt | null = null
+    let eligibleDebts: Debt[] = []
+
+    if (invite.debtId) {
+      const d = await db.query.debts.findFirst({
+        where: eq(debts.id, invite.debtId),
+      })
+      if (!d) return err(new Error('Invite data incomplete'))
+      debt = d
+      eligibleDebts = [d]
+    } else {
+      // User-level invite — fetch all active, CoP-verified debts
+      const allDebts = await db.query.debts.findMany({
+        where: and(
+          eq(debts.userId, invite.userId),
+          eq(debts.copVerified, true),
+        ),
+      })
+      eligibleDebts = allDebts.filter(d => d.status !== 'resolved')
     }
 
     // Increment open count
@@ -229,6 +252,7 @@ export class InviteService {
     return ok({
       invite,
       debt,
+      debts: eligibleDebts,
       recipient: { firstName: user.firstName, lastName: user.lastName },
     })
   }

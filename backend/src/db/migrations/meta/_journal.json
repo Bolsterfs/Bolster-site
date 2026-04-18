@@ -8,6 +8,13 @@
       "when": 1775821864614,
       "tag": "0000_tiresome_the_enforcers",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1776172800000,
+      "tag": "0001_make_invite_debt_id_optional",
+      "breakpoints": true
     }
   ]
 }

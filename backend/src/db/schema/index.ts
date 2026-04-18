@@ -121,7 +121,7 @@ export const invites = pgTable('invites', {
   id:             uuid('id').primaryKey().defaultRandom(),
   token:          text('token').notNull().unique(),     // HMAC-signed, URL-safe
   userId:         uuid('user_id').notNull().references(() => users.id),
-  debtId:         uuid('debt_id').notNull().references(() => debts.id),
+  debtId:         uuid('debt_id').references(() => debts.id),  // nullable — user-level invites let contributor choose
   privacyLevel:   privacyLevelEnum('privacy_level').notNull().default('amount_only'),
   personalMessage: text('personal_message'),            // optional message from recipient
   maxAmountPence: integer('max_amount_pence'),           // optional cap on contribution

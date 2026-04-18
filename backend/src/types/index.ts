@@ -64,7 +64,7 @@ export type CreateDebtInput = z.infer<typeof createDebtSchema>
 // ─── Invite schemas ───────────────────────────────────────────────────────────
 
 export const createInviteSchema = z.object({
-  debtId:          uuidSchema,
+  debtId:          uuidSchema.optional(),  // optional — user-level invites let contributor choose
   privacyLevel:    z.enum(['amount_only', 'creditor_name', 'full_balance']),
   personalMessage: z.string().max(500).optional(),
   maxAmountPence:  penceSchema.optional(),
@@ -77,6 +77,7 @@ export type CreateInviteInput = z.infer<typeof createInviteSchema>
 
 export const initiatePaymentSchema = z.object({
   inviteToken:       z.string().min(1),
+  debtId:            uuidSchema,  // contributor selects which debt to pay
   amountPence:       penceSchema,
   contributorEmail:  z.string().email(),
   contributorName:   z.string().min(1).max(200),
