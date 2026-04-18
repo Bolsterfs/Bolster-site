@@ -1,10 +1,6 @@
 import { notFound } from 'next/navigation'
 import PayContributorFlow from '../../../components/payment/PayContributorFlow'
 
-interface InvitePageProps {
-  params: { token: string }
-}
-
 /**
  * Public invite page — no authentication required.
  * This is what the contributor (friend/family member) sees when they
@@ -13,7 +9,9 @@ interface InvitePageProps {
  * The page fetches invite details server-side and passes to the client
  * payment flow component.
  */
-export default async function InvitePage({ params }: InvitePageProps) {
+export default async function InvitePage({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params
+
   // Fetch invite details server-side (better for SEO and initial load).
   // Wrap in try-catch: if API_URL is misconfigured or the backend is down,
   // fetch() throws a TypeError — without this it propagates as an unhandled
@@ -21,7 +19,7 @@ export default async function InvitePage({ params }: InvitePageProps) {
   let invite: unknown
   try {
     const response = await fetch(
-      `${process.env.API_URL}/api/v1/invites/resolve/${params.token}`,
+      `${process.env.API_URL}/api/v1/invites/resolve/${token}`,
       { cache: 'no-store' }, // invites must always be fresh
     )
 
@@ -99,7 +97,7 @@ export default async function InvitePage({ params }: InvitePageProps) {
 
           {/* The payment form */}
           <PayContributorFlow
-            inviteToken={params.token}
+            inviteToken={token}
             invite={typedInvite}
           />
 
