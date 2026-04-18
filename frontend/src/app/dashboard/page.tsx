@@ -146,12 +146,13 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  {debt.status !== 'resolved' && debt.copVerified && (
+                  {debt.status !== 'pending' && (
                     <Link
                       href={`/dashboard/invites/new?debtId=${debt.id}`}
-                      className="mt-3 btn-primary text-sm py-2 inline-block text-center w-full"
+                      className="mt-3 text-sm py-2 inline-block text-center w-full rounded-lg font-semibold transition-colors"
+                      style={{ backgroundColor: '#f97316', color: 'white' }}
                     >
-                      Create invite link →
+                      Create invite →
                     </Link>
                   )}
                 </div>
@@ -176,7 +177,7 @@ export default function DashboardPage() {
               <EmptyState
                 icon="💌"
                 title="No invites created yet"
-                description="Create a private invite link to share with someone you trust."
+                description="Go to your Debts tab to create an invite for a specific bill."
               />
             ) : (
               invites.map((invite) => (
