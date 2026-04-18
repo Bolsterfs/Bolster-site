@@ -37,7 +37,7 @@ export async function inviteRoutes(app: FastifyInstance) {
             ? d.creditorName
             : undefined,
         remainingAmountPence:
-          invite.privacyLevel === 'full_balance'
+          invite.privacyLevel !== 'amount_only'
             ? d.totalAmountPence - d.paidAmountPence
             : undefined,
       }))
