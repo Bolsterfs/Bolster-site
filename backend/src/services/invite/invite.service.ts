@@ -231,6 +231,10 @@ export class InviteService {
         ),
       })
       eligibleDebts = allDebts.filter(d => d.status !== 'resolved')
+      console.log('[invite:resolve] User-level invite — found debts:', eligibleDebts.map(d => ({
+        id: d.id, creditorName: d.creditorName, status: d.status, copVerified: d.copVerified,
+        remaining: d.totalAmountPence - d.paidAmountPence,
+      })))
     }
 
     // Increment open count
