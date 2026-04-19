@@ -20,41 +20,53 @@ export async function devRoutes(app: FastifyInstance) {
   app.post('/seed', { preHandler: [authenticate] }, async (request, reply) => {
     const user = request.user as JwtPayload
 
-    // Find or create a test debt for this user
-    let debt = await db.query.debts.findFirst({
-      where: and(
-        eq(debts.userId, user.sub),
-        eq(debts.creditorName, 'Test BNPL Provider'),
-      ),
-    })
+    // Seed realistic UK debts
+    const seedDebts = [
+      { creditorName: 'British Gas',  sortCode: '200000', account: '31510604', ref: 'BG-ELEC-2024',   amountPence: 18400 },  // £184.00
+      { creditorName: 'Barclays',     sortCode: '200000', account: '43219876', ref: 'BCARD-MIN-PAY',   amountPence: 275000 }, // £2,750.00
+      { creditorName: 'Vodafone',     sortCode: '200000', account: '55512345', ref: 'VF-MOBILE-Q2',    amountPence: 8900 },   // £89.00
+    ]
 
-    if (!debt) {
-      const [created] = await db
-        .insert(debts)
-        .values({
-          userId:           user.sub,
-          creditorName:     'Test BNPL Provider',
-          creditorSortCode: '040004',
-          creditorAccount:  '00000000',
-          creditorRef:      'BOLSTER-TEST',
-          totalAmountPence: 15000,   // £150
-          paidAmountPence:  0,
-          status:           'active',
-          copVerified:      true,
-          copVerifiedAt:    new Date(),
-        })
-        .returning()
-      debt = created
+    const createdDebts = []
+
+    for (const sd of seedDebts) {
+      let debt = await db.query.debts.findFirst({
+        where: and(
+          eq(debts.userId, user.sub),
+          eq(debts.creditorName, sd.creditorName),
+        ),
+      })
+
+      if (!debt) {
+        const [created] = await db
+          .insert(debts)
+          .values({
+            userId:           user.sub,
+            creditorName:     sd.creditorName,
+            creditorSortCode: sd.sortCode,
+            creditorAccount:  sd.account,
+            creditorRef:      sd.ref,
+            totalAmountPence: sd.amountPence,
+            paidAmountPence:  0,
+            status:           'active',
+            copVerified:      true,
+            copVerifiedAt:    new Date(),
+          })
+          .returning()
+        debt = created
+      }
+
+      if (debt) createdDebts.push(debt)
     }
 
-    if (!debt) {
-      return reply.status(500).send({ success: false, error: 'Failed to create test debt' })
+    if (createdDebts.length === 0) {
+      return reply.status(500).send({ success: false, error: 'Failed to create test debts' })
     }
 
-    // Find or create an active invite for the debt
+    // Find or create a user-level invite (no specific debt — contributor picks)
     let invite = await db.query.invites.findFirst({
       where: and(
-        eq(invites.debtId, debt.id),
+        eq(invites.userId, user.sub),
         eq(invites.status, 'active'),
       ),
     })
@@ -68,9 +80,9 @@ export async function devRoutes(app: FastifyInstance) {
         .values({
           token:         'pending',
           userId:        user.sub,
-          debtId:        debt.id,
+          debtId:        null,
           privacyLevel:  'creditor_name',
-          personalMessage: 'This is a test invite from Bolster dev tools.',
+          personalMessage: 'Hi, I could use a little help with one of my bills this month. Any amount helps 💙',
           expiresAt,
           status:        'active',
         })
@@ -95,7 +107,7 @@ export async function devRoutes(app: FastifyInstance) {
     return reply.send({
       success: true,
       data: {
-        debtId:    debt.id,
+        debtIds: createdDebts.map(d => d.id),
         inviteUrl,
       },
     })
