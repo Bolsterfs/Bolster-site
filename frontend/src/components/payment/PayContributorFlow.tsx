@@ -31,9 +31,15 @@ export default function PayContributorFlow({ inviteToken, invite, selectedDebt }
     ? invite.inviteMaxAmountPence / 100
     : null
 
-  const remainingPounds = selectedDebt.remainingAmountPence
-    ? selectedDebt.remainingAmountPence / 100
-    : null
+  const remainingPence = selectedDebt.remainingAmountPence ?? null
+  const remainingPounds = remainingPence != null ? remainingPence / 100 : null
+  const isFullyPaid = remainingPence != null && remainingPence <= 0
+
+  // Effective max: the lesser of invite max and remaining balance
+  const effectiveMaxPounds = (() => {
+    if (maxAmountPounds && remainingPounds) return Math.min(maxAmountPounds, remainingPounds)
+    return maxAmountPounds ?? remainingPounds
+  })()
 
   // ── Step 1: amount entry ──────────────────────────────────────────────────
   function handleAmountSubmit() {
@@ -42,8 +48,12 @@ export default function PayContributorFlow({ inviteToken, invite, selectedDebt }
       setError('Please enter an amount of at least £1.00')
       return
     }
-    if (maxAmountPounds && parseFloat(amountPounds) > maxAmountPounds) {
-      setError(`Maximum contribution is ${formatPence(invite.inviteMaxAmountPence!)}`)
+    if (effectiveMaxPounds && parseFloat(amountPounds) > effectiveMaxPounds) {
+      if (remainingPounds && parseFloat(amountPounds) > remainingPounds) {
+        setError(`Amount cannot exceed the outstanding balance of ${formatPence(remainingPence!)}`)
+      } else {
+        setError(`Maximum contribution is ${formatPence(invite.inviteMaxAmountPence!)}`)
+      }
       return
     }
     setStep('details')
@@ -100,12 +110,23 @@ export default function PayContributorFlow({ inviteToken, invite, selectedDebt }
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div>
-      {step === 'amount' && (
+      {step === 'amount' && isFullyPaid && (
+        <div className="card text-center py-8">
+          <div className="text-4xl mb-4">✅</div>
+          <h2 className="text-white font-semibold mb-2">This debt has been fully paid</h2>
+          <p className="text-mid-gray text-sm">
+            Great news — this bill has already been settled. No further payments are needed.
+          </p>
+        </div>
+      )}
+
+      {step === 'amount' && !isFullyPaid && (
         <div className="card">
           <h2 className="text-lg font-semibold text-white mb-1">How much would you like to pay?</h2>
-          {remainingPounds && (
+          {remainingPounds != null && (
             <p className="text-sm text-mid-gray mb-4">
-              Outstanding amount: <span className="text-white font-medium">£{remainingPounds.toFixed(2)}</span>
+              Maximum: <span className="text-white font-medium">£{remainingPounds.toFixed(2)}</span>
+              <span className="text-mid-gray"> (full outstanding balance)</span>
             </p>
           )}
 
@@ -118,7 +139,7 @@ export default function PayContributorFlow({ inviteToken, invite, selectedDebt }
                 className="input pl-8"
                 placeholder="0.00"
                 min="1"
-                max={maxAmountPounds ?? undefined}
+                max={effectiveMaxPounds ?? undefined}
                 step="0.01"
                 value={amountPounds}
                 onChange={(e) => setAmountPounds(e.target.value)}
@@ -129,18 +150,20 @@ export default function PayContributorFlow({ inviteToken, invite, selectedDebt }
             {error && <p className="error-text">{error}</p>}
           </div>
 
-          {/* Quick amount buttons */}
+          {/* Quick amount buttons — only show amounts within remaining balance */}
           <div className="grid grid-cols-3 gap-2 mb-5">
-            {[25, 50, 100].map((amt) => (
-              <button
-                key={amt}
-                type="button"
-                className="border border-blue-800 rounded-lg py-2 text-sm text-mid-gray hover:border-teal-500 hover:text-teal-400 transition-colors"
-                onClick={() => setAmountPounds(String(amt))}
-              >
-                £{amt}
-              </button>
-            ))}
+            {[25, 50, 100]
+              .filter((amt) => !effectiveMaxPounds || amt <= effectiveMaxPounds)
+              .map((amt) => (
+                <button
+                  key={amt}
+                  type="button"
+                  className="border border-blue-800 rounded-lg py-2 text-sm text-mid-gray hover:border-teal-500 hover:text-teal-400 transition-colors"
+                  onClick={() => setAmountPounds(String(amt))}
+                >
+                  £{amt}
+                </button>
+              ))}
           </div>
 
           <button

@@ -54,7 +54,19 @@ export class PaymentService {
       return err(new Error('Selected debt is not available for this invite'))
     }
 
-    // Validate payment amount against invite constraints
+    // Validate payment amount against debt balance
+    const remainingPence = debt.totalAmountPence - debt.paidAmountPence
+    if (remainingPence <= 0) {
+      return err(new Error('This debt has been fully paid'))
+    }
+
+    if (input.amountPence > remainingPence) {
+      return err(new Error(
+        `Payment amount exceeds the outstanding balance on this debt (£${(remainingPence / 100).toFixed(2)} remaining)`,
+      ))
+    }
+
+    // Validate payment amount against system constraints
     try {
       validatePaymentAmount(input.amountPence)
     } catch (e) {
