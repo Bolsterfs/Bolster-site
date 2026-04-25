@@ -35,7 +35,12 @@ export const accountNumberSchema = z
 
 export const registerSchema = z.object({
   email:     z.string().email(),
-  password:  z.string().min(12, 'Password must be at least 12 characters'),
+  password:  z.string()
+    .min(12, 'Password must be at least 12 characters')
+    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
+    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
+    .regex(/[0-9]/, 'Password must contain at least one number')
+    .regex(/[!@#$%^&*()\-_=+[\]{};:'",.<>/?\\|`~]/, 'Password must contain at least one special character (e.g. !@#$%^&*)'),
   firstName: z.string().min(1).max(100),
   lastName:  z.string().min(1).max(100),
   phone:     z.string().regex(/^\+44\d{10}$/, 'Must be a UK mobile number (+44...)').optional(),

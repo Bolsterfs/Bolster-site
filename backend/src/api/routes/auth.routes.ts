@@ -18,10 +18,12 @@ export async function authRoutes(app: FastifyInstance) {
   }, async (request, reply) => {
     const body = registerSchema.safeParse(request.body)
     if (!body.success) {
+      const fieldErrors = body.error.flatten().fieldErrors
+      const passwordError = fieldErrors.password?.[0]
       return reply.status(400).send({
         success: false,
-        error: 'Invalid registration data',
-        details: body.error.flatten().fieldErrors,
+        error: passwordError ?? 'Invalid registration data',
+        details: fieldErrors,
       })
     }
 

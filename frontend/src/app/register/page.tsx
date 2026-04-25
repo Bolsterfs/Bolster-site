@@ -21,6 +21,17 @@ const EMPTY: FormState = {
   phone:     '',
 }
 
+const PASSWORD_RULES = [
+  { id: 'length',    label: 'At least 12 characters',         test: (p: string) => p.length >= 12 },
+  { id: 'uppercase', label: 'One uppercase letter (A-Z)',     test: (p: string) => /[A-Z]/.test(p) },
+  { id: 'lowercase', label: 'One lowercase letter (a-z)',     test: (p: string) => /[a-z]/.test(p) },
+  { id: 'number',    label: 'One number (0-9)',               test: (p: string) => /[0-9]/.test(p) },
+  { id: 'special',   label: 'One special character (!@#$%^&*)', test: (p: string) => /[!@#$%^&*()\-_=+[\]{};:'",.<>/?\\|`~]/.test(p) },
+] as const
+
+const STRENGTH_LABELS = ['Weak', 'Fair', 'Good', 'Strong'] as const
+const ORANGE = '#f97316'
+
 export default function RegisterPage() {
   const router = useRouter()
   const [form,    setForm]    = useState<FormState>(EMPTY)
@@ -33,6 +44,21 @@ export default function RegisterPage() {
       setError(null)
     }
   }
+
+  const ruleResults = PASSWORD_RULES.map((rule) => ({
+    ...rule,
+    met: rule.test(form.password),
+  }))
+  const metCount = ruleResults.filter((r) => r.met).length
+  const allRulesMet = metCount === PASSWORD_RULES.length
+
+  // Map 0-5 met rules → 0-4 filled bars (only all 5 = Strong)
+  const filledBars =
+    metCount === 0 ? 0 :
+    metCount <= 2 ? 1 :
+    metCount === 3 ? 2 :
+    metCount === 4 ? 3 : 4
+  const strengthLabel = filledBars === 0 ? '' : STRENGTH_LABELS[filledBars - 1]
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -59,7 +85,7 @@ export default function RegisterPage() {
     router.push('/kyc')
   }
 
-  const canSubmit = !loading && form.firstName && form.lastName && form.email && form.password
+  const canSubmit = !loading && form.firstName && form.lastName && form.email && allRulesMet
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#FAFAF8', display: 'flex', flexDirection: 'column' }}>
@@ -151,8 +177,55 @@ export default function RegisterPage() {
                   required
                   minLength={12}
                   disabled={loading}
+                  aria-describedby="password-strength password-rules"
                 />
-                <p style={{ fontSize: '12px', color: '#9CA3AF', marginTop: '4px' }}>Minimum 12 characters</p>
+
+                {/* Strength bars */}
+                <div id="password-strength" style={{ marginTop: '10px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+                    {[0, 1, 2, 3].map((i) => (
+                      <div
+                        key={i}
+                        style={{
+                          height: '6px',
+                          borderRadius: '3px',
+                          backgroundColor: i < filledBars ? ORANGE : '#E5E7EB',
+                          transition: 'background-color 150ms ease',
+                        }}
+                      />
+                    ))}
+                  </div>
+                  {strengthLabel && (
+                    <p style={{ fontSize: '12px', color: '#6B7280', marginTop: '6px', marginBottom: 0 }}>
+                      Strength: <span style={{ color: ORANGE, fontWeight: 600 }}>{strengthLabel}</span>
+                    </p>
+                  )}
+                </div>
+
+                {/* Rules checklist */}
+                <ul id="password-rules" style={{ listStyle: 'none', padding: 0, margin: '10px 0 0 0' }}>
+                  {ruleResults.map((rule) => {
+                    const untouched = form.password.length === 0
+                    const color = rule.met ? '#16A34A' : untouched ? '#9CA3AF' : '#DC2626'
+                    const icon  = rule.met ? '✓' : untouched ? '○' : '✕'
+                    return (
+                      <li
+                        key={rule.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          fontSize: '12px',
+                          color,
+                          padding: '2px 0',
+                        }}
+                      >
+                        <span aria-hidden="true" style={{ fontWeight: 700, width: '12px', display: 'inline-block', textAlign: 'center' }}>{icon}</span>
+                        <span>{rule.label}</span>
+                      </li>
+                    )
+                  })}
+                </ul>
               </div>
 
               <div style={{ marginBottom: '20px' }}>
@@ -184,7 +257,7 @@ export default function RegisterPage() {
                 disabled={!canSubmit}
                 style={{
                   width: '100%',
-                  backgroundColor: canSubmit ? '#6B21A8' : '#6B21A8',
+                  backgroundColor: '#6B21A8',
                   opacity: canSubmit ? 1 : 0.5,
                   color: 'white',
                   fontSize: '16px',
