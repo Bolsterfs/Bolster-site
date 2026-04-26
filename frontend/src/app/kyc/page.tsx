@@ -10,10 +10,17 @@ type PageState =
   | 'pending'        // returned from Veriff, awaiting decision
   | 'error'          // something went wrong
 
+type CheckFeedback =
+  | { kind: 'idle' }
+  | { kind: 'pending' }
+  | { kind: 'error' }
+
 export default function KycPage() {
   const router     = useRouter()
   const [state,    setState]    = useState<PageState>('loading')
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [checking, setChecking] = useState(false)
+  const [checkFeedback, setCheckFeedback] = useState<CheckFeedback>({ kind: 'idle' })
 
   // On mount, check if we're returning from Veriff (poll status)
   // or need to start a new session
@@ -63,10 +70,25 @@ export default function KycPage() {
   }
 
   async function checkStatus() {
+    if (checking) return
+    setChecking(true)
+    setCheckFeedback({ kind: 'idle' })
+
     const result = await kycApi.status()
-    if (result.ok && result.data.kycStatus === 'approved') {
-      router.push('/dashboard')
+
+    if (!result.ok) {
+      setCheckFeedback({ kind: 'error' })
+      setChecking(false)
+      return
     }
+
+    if (result.data.kycStatus === 'approved') {
+      router.push('/dashboard')
+      return
+    }
+
+    setCheckFeedback({ kind: 'pending' })
+    setChecking(false)
   }
 
   // ── Render ───────────────────────────────────────────────────────────────
@@ -114,11 +136,30 @@ export default function KycPage() {
                   Already approved? Check your status below.
                 </p>
                 <button
-                  className="btn-secondary mt-3 text-sm px-5 py-2"
+                  className="btn-secondary mt-3 text-sm px-5 py-2 inline-flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                   onClick={() => void checkStatus()}
+                  disabled={checking}
+                  aria-busy={checking}
                 >
-                  Check status
+                  {checking && (
+                    <span
+                      aria-hidden="true"
+                      className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin"
+                    />
+                  )}
+                  {checking ? 'Checking…' : 'Check status'}
                 </button>
+
+                {checkFeedback.kind === 'pending' && (
+                  <p className="mt-3 text-xs text-mid-gray" role="status">
+                    Still processing — Veriff usually takes 1-2 minutes. Please try again shortly.
+                  </p>
+                )}
+                {checkFeedback.kind === 'error' && (
+                  <p className="mt-3 text-xs" style={{ color: '#f97316' }} role="alert">
+                    Unable to check status. Please refresh the page and try again.
+                  </p>
+                )}
               </div>
             </div>
           )}
