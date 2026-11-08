@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import { kycApi, setAccessToken, setRefreshToken } from '../../lib/api'
 
 type PageState =
-  | 'loading'        // creating Veriff session
+  | 'loading'        // checking current status
+  | 'choose'         // development only: pick dev approval or the real Veriff flow
   | 'redirecting'    // redirecting to Veriff
   | 'pending'        // returned from Veriff, awaiting decision
   | 'error'          // something went wrong
@@ -43,7 +44,19 @@ export default function KycPage() {
       }
     }
 
-    // Start a new Veriff session
+    // In development, stop and ask. Veriff's sandbox sends people back to an
+    // https://localhost address that the local app cannot serve, so going
+    // straight to Veriff strands a new user on a browser error page.
+    if (process.env.NODE_ENV === 'development') {
+      setState('choose')
+      return
+    }
+
+    await startVeriff()
+  }
+
+  async function startVeriff() {
+    setState('loading')
     const result = await kycApi.initiate()
     if (!result.ok) {
       setErrorMsg(result.error)
@@ -114,6 +127,43 @@ export default function KycPage() {
                 {state === 'loading'
                   ? 'Preparing identity verification…'
                   : 'Redirecting to Veriff…'}
+              </p>
+            </div>
+          )}
+
+          {/* Development only — choose how to pass the identity check */}
+          {state === 'choose' && (
+            <div className="card">
+              <h1 className="text-xl font-bold text-white mb-2">Identity check</h1>
+              <p className="text-mid-gray text-sm leading-relaxed mb-6">
+                Bolster has to confirm who you are before you can add a debt or invite anyone.
+                In the real app this is a short document-and-selfie check with Veriff.
+              </p>
+
+              <div className="rounded-lg border border-yellow-700/50 bg-yellow-950/30 p-4 mb-4">
+                <p className="text-sm font-semibold text-yellow-300 mb-1">You&apos;re running locally</p>
+                <p className="text-xs text-yellow-200/80 leading-relaxed mb-3">
+                  The real Veriff check can&apos;t complete here — it sends you back to an https
+                  address this local app doesn&apos;t serve. Use the development approval instead.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handleDevApprove()}
+                  className="btn-primary w-full text-sm py-2.5"
+                >
+                  Approve my identity (development)
+                </button>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => void startVeriff()}
+                className="btn-secondary w-full text-sm py-2.5"
+              >
+                Try the real Veriff check anyway
+              </button>
+              <p className="text-[11px] text-mid-gray mt-2 text-center">
+                Only works once the app is deployed on https.
               </p>
             </div>
           )}
