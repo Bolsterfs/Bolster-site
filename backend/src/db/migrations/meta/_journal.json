@@ -15,6 +15,27 @@
       "when": 1776172800000,
       "tag": "0001_make_invite_debt_id_optional",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1791100800000,
+      "tag": "0002_password_reset",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1791126000000,
+      "tag": "0003_creditor_list",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1794168000000,
+      "tag": "0004_stripe_reconciliation",
+      "breakpoints": true
     }
   ]
 }

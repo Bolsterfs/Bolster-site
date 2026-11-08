@@ -24,7 +24,11 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
+        // --font-inter is not defined anywhere yet, and an undefined var() with
+        // no fallback invalidates the whole declaration (everything renders in
+        // the browser's default serif). The fallback keeps a clean system font
+        // until Inter is actually loaded.
+        sans: ['var(--font-inter, system-ui)', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
       },
       animation: {
         'fade-in': 'fadeIn 0.3s ease-in-out',

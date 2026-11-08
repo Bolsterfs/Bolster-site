@@ -28,7 +28,7 @@ export default function DevTools() {
   async function handleAutoLogin() {
     setBusy('login')
     setMsg(null)
-    const result = await auth.login('test6@bolster.io', 'TestPassword123!')
+    const result = await auth.login('test6@bolsterfs.co.uk', 'TestPassword123!')
     setBusy(null)
 
     if (!result.ok) {
@@ -84,6 +84,55 @@ export default function DevTools() {
 
     setInviteUrl(result.data.inviteUrl)
     setMsg('Seeded')
+  }
+
+  async function handleVerifyDebts() {
+    if (!getAccessToken()) {
+      setMsg('Login first')
+      return
+    }
+    setBusy('verify')
+    setMsg(null)
+    const result = await devApi.verifyDebts()
+    setBusy(null)
+
+    if (!result.ok) {
+      setMsg(result.error)
+      return
+    }
+
+    const count = result.data.verifiedCount
+    if (count === 0) {
+      setMsg('No debts waiting for verification')
+      return
+    }
+    setMsg(`Verified ${count} debt${count === 1 ? '' : 's'} — reloading`)
+    // Reload so the dashboard shows the new status straight away
+    setTimeout(() => window.location.reload(), 800)
+  }
+
+  async function handleReconcile() {
+    if (!getAccessToken()) {
+      setMsg('Login first')
+      return
+    }
+    setBusy('reconcile')
+    setMsg(null)
+    const result = await devApi.reconcileStripe()
+    setBusy(null)
+
+    if (!result.ok) {
+      setMsg(result.error)
+      return
+    }
+
+    const { checked, settled, expired, unknown } = result.data
+    if (checked === 0) {
+      setMsg('No pending card payments to check')
+      return
+    }
+    setMsg(`Checked ${checked}: ${settled} settled, ${expired} expired, ${unknown} unresolved — reloading`)
+    setTimeout(() => window.location.reload(), 1200)
   }
 
   function handleCopyInvite() {
@@ -168,6 +217,26 @@ export default function DevTools() {
               className="w-full bg-purple-600 hover:bg-purple-700 disabled:opacity-50 text-white text-xs font-medium py-2 px-3 rounded-lg transition-colors"
             >
               {busy === 'seed' ? 'Seeding...' : 'Seed test data'}
+            </button>
+
+            {/* Verify debts (skips the creditor account check) */}
+            <button
+              type="button"
+              onClick={() => void handleVerifyDebts()}
+              disabled={busy === 'verify'}
+              className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white text-xs font-medium py-2 px-3 rounded-lg transition-colors"
+            >
+              {busy === 'verify' ? 'Verifying...' : 'Verify my debts'}
+            </button>
+
+            {/* Reconcile pending card payments with Stripe */}
+            <button
+              type="button"
+              onClick={() => void handleReconcile()}
+              disabled={busy === 'reconcile'}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-medium py-2 px-3 rounded-lg transition-colors"
+            >
+              {busy === 'reconcile' ? 'Checking Stripe...' : 'Reconcile payments with Stripe'}
             </button>
 
             {/* Invite URL */}

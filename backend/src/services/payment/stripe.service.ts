@@ -8,6 +8,27 @@ export interface StripeCheckoutResult {
   sessionUrl: string   // redirect contributor here
 }
 
+/** The parts of a Checkout session we need to decide a payment's fate. */
+export interface StripeSessionState {
+  sessionId:     string
+  /** 'open' (contributor still on checkout), 'complete' (finished) or 'expired' */
+  status:        'open' | 'complete' | 'expired'
+  /** 'paid' means the card was charged successfully */
+  paymentStatus: 'paid' | 'unpaid' | 'no_payment_required'
+  amountTotal:   number | null
+  expiresAt:     Date | null
+}
+
+function toSessionState(session: Stripe.Checkout.Session): StripeSessionState {
+  return {
+    sessionId:     session.id,
+    status:        (session.status ?? 'open') as StripeSessionState['status'],
+    paymentStatus: session.payment_status as StripeSessionState['paymentStatus'],
+    amountTotal:   session.amount_total,
+    expiresAt:     session.expires_at ? new Date(session.expires_at * 1000) : null,
+  }
+}
+
 /**
  * Stripe Checkout Service — fallback payment method
  *
@@ -101,6 +122,57 @@ export class StripePaymentService {
         sessionId:  session.id,
         sessionUrl: session.url,
       })
+    } catch (e) {
+      return err(e instanceof Error ? e : new Error(String(e)))
+    }
+  }
+
+  /**
+   * Ask Stripe for the current state of a Checkout session.
+   * Used to reconcile payments when a webhook was missed.
+   */
+  async getCheckoutSession(sessionId: string): Promise<Result<StripeSessionState>> {
+    try {
+      const stripe = this.getClient()
+      const session = await stripe.checkout.sessions.retrieve(
+        sessionId,
+        undefined,
+        env.STRIPE_CONNECT_ACCOUNT_ID ? { stripeAccount: env.STRIPE_CONNECT_ACCOUNT_ID } : undefined,
+      )
+      return ok(toSessionState(session))
+    } catch (e) {
+      return err(e instanceof Error ? e : new Error(String(e)))
+    }
+  }
+
+  /**
+   * Find the Checkout session for a Bolster payment created before we started
+   * storing session IDs, by matching the metadata we put on every session.
+   * Searches sessions created within a window around the payment's creation.
+   * Returns ok(null) when nothing matches.
+   */
+  async findCheckoutSessionForPayment(
+    bolsterPaymentId: string,
+    createdAt:        Date,
+  ): Promise<Result<StripeSessionState | null>> {
+    try {
+      const stripe = this.getClient()
+      const created = Math.floor(createdAt.getTime() / 1000)
+      const opts = env.STRIPE_CONNECT_ACCOUNT_ID ? { stripeAccount: env.STRIPE_CONNECT_ACCOUNT_ID } : undefined
+
+      // Sessions are created within seconds of the payment row; a 1-hour window
+      // either side is generous and keeps the listing small.
+      const sessions = stripe.checkout.sessions.list(
+        { created: { gte: created - 3600, lte: created + 3600 }, limit: 100 },
+        opts,
+      )
+
+      for await (const session of sessions) {
+        if (session.metadata?.bolsterPaymentId === bolsterPaymentId) {
+          return ok(toSessionState(session))
+        }
+      }
+      return ok(null)
     } catch (e) {
       return err(e instanceof Error ? e : new Error(String(e)))
     }

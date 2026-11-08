@@ -1,9 +1,20 @@
 import { describe, it, expect, beforeAll } from 'vitest'
-import { generateInviteToken, verifyInviteToken } from '../services/invite/invite.service.js'
+import { generateInviteToken, verifyInviteToken } from './invite.service.js'
 
 beforeAll(() => {
   process.env.INVITE_SECRET = 'test-invite-secret-must-be-at-least-32-characters-long'
 })
+
+// Token format: {base64url(payload)}-{43-char base64url HMAC}. The payload can
+// itself contain '-', so split by the fixed signature length, as the service does.
+const SIGNATURE_LENGTH = 43
+
+function splitToken(token: string): { payload: string; sig: string } {
+  return {
+    payload: token.slice(0, token.length - SIGNATURE_LENGTH - 1),
+    sig:     token.slice(-SIGNATURE_LENGTH),
+  }
+}
 
 describe('invite token signing', () => {
   it('generates a token and verifies it correctly', () => {
@@ -11,7 +22,7 @@ describe('invite token signing', () => {
     const token    = generateInviteToken(inviteId)
 
     expect(token).toBeTruthy()
-    expect(token).toContain('.')
+    expect(token).toMatch(/^[A-Za-z0-9_-]+-[A-Za-z0-9_-]{43}$/)
 
     const extracted = verifyInviteToken(token)
     expect(extracted).toBe(inviteId)
@@ -21,9 +32,10 @@ describe('invite token signing', () => {
     const inviteId = 'abc123-def456-ghi789'
     const token    = generateInviteToken(inviteId)
 
-    // Tamper with the payload
-    const [payload, sig] = token.split('.')
-    const tampered = `${payload}X.${sig}`
+    // Swap in a different payload but keep the original signature
+    const { sig } = splitToken(token)
+    const forgedPayload = Buffer.from(`someone-elses-invite:${Date.now()}`).toString('base64url')
+    const tampered = `${forgedPayload}-${sig}`
 
     expect(verifyInviteToken(tampered)).toBeNull()
   })
@@ -32,8 +44,10 @@ describe('invite token signing', () => {
     const inviteId = 'abc123-def456-ghi789'
     const token    = generateInviteToken(inviteId)
 
-    const [payload, sig] = token.split('.')
-    const tampered = `${payload}.${sig}X`
+    // Change one character of the signature, keeping its length
+    const { payload, sig } = splitToken(token)
+    const flipped  = (sig.startsWith('A') ? 'B' : 'A') + sig.slice(1)
+    const tampered = `${payload}-${flipped}`
 
     expect(verifyInviteToken(tampered)).toBeNull()
   })

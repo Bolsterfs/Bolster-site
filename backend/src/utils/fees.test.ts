@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { calculateFee, formatPence, validatePaymentAmount } from '../utils/fees.js'
+import { calculateFee, formatPence, getFeePolicy, validatePaymentAmount } from '../utils/fees.js'
 
 // Mock env for tests
 process.env.BOLSTER_FEE_PERCENTAGE = '1.5'
@@ -44,6 +44,35 @@ describe('calculateFee', () => {
     const result = calculateFee(10000) // £100
     expect(result.netAmountPence).toBe(10000)
     expect(result.grossAmountPence).toBe(result.netAmountPence + result.feeAmountPence)
+  })
+})
+
+describe('getFeePolicy', () => {
+  it('describes the rules calculateFee actually applies', () => {
+    const policy = getFeePolicy()
+
+    // Just below, at and above the point where 1.5% overtakes the minimum fee
+    const atMinimum = calculateFee(policy.minPaymentPence)
+    expect(atMinimum.feeAmountPence).toBe(policy.minFeePence)
+
+    const percentage = calculateFee(20000) // £200 → 1.5% = £3.00
+    expect(percentage.feeAmountPence).toBe(Math.round(20000 * (policy.percentage / 100)))
+    expect(percentage.feeAmountPence).toBeGreaterThan(policy.minFeePence)
+    expect(percentage.feeAmountPence).toBeLessThan(policy.maxFeePence)
+
+    const capped = calculateFee(500000) // £5,000 → 1.5% = £75 → capped
+    expect(capped.feeAmountPence).toBe(policy.maxFeePence)
+  })
+
+  it('never returns a fee outside the stated minimum and maximum', () => {
+    const policy = getFeePolicy()
+    for (const net of [100, 101, 999, 6666, 6667, 6700, 99999, 100000, 100001, 150000]) {
+      const { feeAmountPence, grossAmountPence } = calculateFee(net)
+      expect(feeAmountPence).toBeGreaterThanOrEqual(policy.minFeePence)
+      expect(feeAmountPence).toBeLessThanOrEqual(policy.maxFeePence)
+      expect(Number.isInteger(feeAmountPence)).toBe(true)
+      expect(grossAmountPence).toBe(net + feeAmountPence)
+    }
   })
 })
 

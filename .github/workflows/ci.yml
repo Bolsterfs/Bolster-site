@@ -69,7 +69,7 @@ jobs:
           VERIFF_SECRET_KEY:     test-veriff-secret-key
           COMPLY_ADVANTAGE_API_KEY: test-ca-key
           SENDGRID_API_KEY:      test-sg-key
-          SENDGRID_FROM_EMAIL:   test@bolster.io
+          SENDGRID_FROM_EMAIL:   test@bolsterfs.co.uk
           TWILIO_ACCOUNT_SID:    test-twilio-sid
           TWILIO_AUTH_TOKEN:     test-twilio-token
           TWILIO_FROM_NUMBER:    '+441234567890'

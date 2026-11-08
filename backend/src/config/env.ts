@@ -36,6 +36,8 @@ const envSchema = z.object({
   STRIPE_PUBLISHABLE_KEY:     z.string().min(1).optional(),
   STRIPE_WEBHOOK_SECRET:      z.string().min(1).optional(),
   STRIPE_CONNECT_ACCOUNT_ID:  z.string().min(1).optional(),
+  // How often to ask Stripe about card payments still pending (missed webhooks).
+  STRIPE_RECONCILE_INTERVAL_MS: z.coerce.number().int().min(30_000).default(5 * 60 * 1000),
 
   // Comply Advantage
   COMPLY_ADVANTAGE_API_KEY: z.string().min(1),
@@ -47,6 +49,10 @@ const envSchema = z.object({
   TWILIO_ACCOUNT_SID: z.string().min(1),
   TWILIO_AUTH_TOKEN: z.string().min(1),
   TWILIO_FROM_NUMBER: z.string().min(1),
+
+  // Bill scanning (optional). Without a key the scan option is simply off.
+  ANTHROPIC_API_KEY: z.string().optional(),
+  BILL_SCAN_MODEL:   z.string().min(1).default('claude-haiku-4-5-20251001'),
 
   // App
   APP_URL: z.string().url(),
@@ -62,9 +68,9 @@ const envSchema = z.object({
   BOLSTER_FEE_MAX_PENCE: z.coerce.number().int().positive().default(1500),
 
   // Feature flags
-  ENABLE_AML_SCREENING: z.coerce.boolean().default(true),
-  ENABLE_KYC_VERIFICATION: z.coerce.boolean().default(true),
-  ENABLE_PAYMENT_INITIATION: z.coerce.boolean().default(true),
+  ENABLE_AML_SCREENING: z.string().default('true').transform((v) => v.trim().toLowerCase() === 'true'),
+  ENABLE_KYC_VERIFICATION: z.string().default('true').transform((v) => v.trim().toLowerCase() === 'true'),
+  ENABLE_PAYMENT_INITIATION: z.string().default('false').transform((v) => v.trim().toLowerCase() === 'true'),
 })
 
 const parsed = envSchema.safeParse(process.env)

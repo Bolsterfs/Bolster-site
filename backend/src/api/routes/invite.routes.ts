@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify'
+import { env } from '../../config/env.js'
 import { eq } from 'drizzle-orm'
 import { db } from '../../db/client.js'
 import { invites } from '../../db/schema/index.js'
@@ -52,6 +53,8 @@ export async function inviteRoutes(app: FastifyInstance) {
           debts:              publicDebts,
           inviteMaxAmountPence: invite.maxAmountPence,
           expiresAt:          invite.expiresAt,
+          // How the contributor will pay, so the page wording is accurate
+          paymentMethod:      env.ENABLE_PAYMENT_INITIATION ? 'bank_transfer' : 'card',
         },
       })
     },

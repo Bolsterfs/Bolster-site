@@ -1,0 +1,13 @@
+[
+  {
+    "name": "Example Energy Ltd",
+    "category": "energy",
+    "aliases": ["Example Energy"],
+    "sortCode": "000000",
+    "accountNumber": "00000000",
+    "referenceLabel": "Customer reference number",
+    "referenceHint": "Top right of your bill",
+    "verifiedBy": "Your name",
+    "verificationNote": "How you confirmed these bank details, with whom, and when"
+  }
+]

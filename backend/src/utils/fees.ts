@@ -40,9 +40,34 @@ export function calculateFee(netAmountPence: number): FeeCalculation {
   }
 }
 
-/** Format pence as a human-readable GBP string */
+/**
+ * The fee rules in force, so the checkout can explain the fee in plain words
+ * ("1.5%, minimum £1.00, maximum £15.00") without hard-coding the numbers.
+ */
+export interface FeePolicy {
+  percentage:      number   // e.g. 1.5
+  minFeePence:     number
+  maxFeePence:     number
+  minPaymentPence: number
+  maxPaymentPence: number
+}
+
+export function getFeePolicy(): FeePolicy {
+  return {
+    percentage:      env.BOLSTER_FEE_PERCENTAGE,
+    minFeePence:     env.BOLSTER_FEE_MIN_PENCE,
+    maxFeePence:     env.BOLSTER_FEE_MAX_PENCE,
+    minPaymentPence: env.MIN_PAYMENT_AMOUNT_PENCE,
+    maxPaymentPence: env.MAX_PAYMENT_AMOUNT_PENCE,
+  }
+}
+
+/** Format pence as a human-readable GBP string, e.g. 150025 → "£1,500.25" */
 export function formatPence(pence: number): string {
-  return `£${(pence / 100).toFixed(2)}`
+  return new Intl.NumberFormat('en-GB', {
+    style:    'currency',
+    currency: 'GBP',
+  }).format(pence / 100)
 }
 
 /** Validate that an amount is within Bolster's allowed range */

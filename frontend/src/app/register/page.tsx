@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { auth, setAccessToken, setRefreshToken } from '../../lib/api'
+import { checkPassword } from '../../lib/passwordRules'
 
 interface FormState {
   firstName: string
@@ -21,15 +22,6 @@ const EMPTY: FormState = {
   phone:     '',
 }
 
-const PASSWORD_RULES = [
-  { id: 'length',    label: 'At least 12 characters',         test: (p: string) => p.length >= 12 },
-  { id: 'uppercase', label: 'One uppercase letter (A-Z)',     test: (p: string) => /[A-Z]/.test(p) },
-  { id: 'lowercase', label: 'One lowercase letter (a-z)',     test: (p: string) => /[a-z]/.test(p) },
-  { id: 'number',    label: 'One number (0-9)',               test: (p: string) => /[0-9]/.test(p) },
-  { id: 'special',   label: 'One special character (!@#$%^&*)', test: (p: string) => /[!@#$%^&*()\-_=+[\]{};:'",.<>/?\\|`~]/.test(p) },
-] as const
-
-const STRENGTH_LABELS = ['Weak', 'Fair', 'Good', 'Strong'] as const
 const ORANGE = '#f97316'
 
 export default function RegisterPage() {
@@ -45,20 +37,12 @@ export default function RegisterPage() {
     }
   }
 
-  const ruleResults = PASSWORD_RULES.map((rule) => ({
-    ...rule,
-    met: rule.test(form.password),
-  }))
-  const metCount = ruleResults.filter((r) => r.met).length
-  const allRulesMet = metCount === PASSWORD_RULES.length
-
-  // Map 0-5 met rules → 0-4 filled bars (only all 5 = Strong)
-  const filledBars =
-    metCount === 0 ? 0 :
-    metCount <= 2 ? 1 :
-    metCount === 3 ? 2 :
-    metCount === 4 ? 3 : 4
-  const strengthLabel = filledBars === 0 ? '' : STRENGTH_LABELS[filledBars - 1]
+  const {
+    rules: ruleResults,
+    allRulesMet,
+    filledBars,
+    strengthLabel,
+  } = checkPassword(form.password)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()

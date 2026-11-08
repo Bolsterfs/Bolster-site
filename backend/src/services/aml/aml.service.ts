@@ -39,6 +39,14 @@ interface ComplyAdvantageSearchResponse {
  * your MLRO handles SAR filing for confirmed_match results.
  *
  * Records are retained for 5 years minimum (MLR 2017 Reg 40).
+ *
+ * ── FAIL-CLOSED POLICY ──────────────────────────────────────────────────────
+ * If the screening provider is unreachable or returns an error, we DO NOT allow
+ * the payment to proceed. An `error` screening result is recorded and returned
+ * as a failed Result, so the payment service blocks the transaction and the
+ * contributor is told to try again shortly. Allowing an unscreened payment
+ * through would be a regulatory breach (MLR 2017). Screening errors are logged
+ * for MLRO visibility.
  */
 export class AmlService {
   private readonly baseUrl = 'https://api.complyadvantage.com'
@@ -77,9 +85,14 @@ export class AmlService {
       )
 
       if (!response.ok) {
-        // AML screening failure — do not block payment, but log for MLRO review
-        console.error(`Comply Advantage API error: ${response.status}`)
-        const [screening] = await db
+        // ── FAIL-CLOSED ──
+        // Screening failed at the provider. Record the error for MLRO review
+        // and BLOCK the payment by returning err(). We must never process a
+        // payment we could not screen.
+        console.error(
+          `Comply Advantage API error: ${response.status} — screening will BLOCK the payment (fail-closed)`,
+        )
+        await db
           .insert(amlScreenings)
           .values({
             subjectType,
@@ -89,7 +102,11 @@ export class AmlService {
             matchCount:   0,
           })
           .returning()
-        return ok(screening!)
+
+        return err(new Error(
+          'We could not complete a required security check right now. ' +
+          'No payment has been taken. Please try again in a few minutes.',
+        ))
       }
 
       const data = await response.json() as ComplyAdvantageSearchResponse
@@ -119,10 +136,11 @@ export class AmlService {
         .returning()
 
       if (!screening) {
+        // Could not persist the screening — fail closed, don't process payment
         return err(new Error('Failed to save AML screening result'))
       }
 
-      // Log potential matches for MLRO review
+      // Log potential/confirmed matches for MLRO review
       if (result !== 'clear') {
         console.warn(`AML screening ${result} for "${subject.name}" — MLRO review required`, {
           screeningId:       screening.id,
@@ -133,7 +151,30 @@ export class AmlService {
 
       return ok(screening)
     } catch (e) {
-      return err(e instanceof Error ? e : new Error(String(e)))
+      // Network failure or unexpected error — fail closed.
+      console.error(
+        'AML screening threw — blocking payment (fail-closed):',
+        e instanceof Error ? e.message : e,
+      )
+      // Best-effort record of the error for the audit trail
+      try {
+        await db
+          .insert(amlScreenings)
+          .values({
+            subjectType,
+            subjectName:  subject.name,
+            subjectEmail: subject.email ?? null,
+            result:       'error',
+            matchCount:   0,
+          })
+          .returning()
+      } catch {
+        // If even the error record fails, still block the payment below.
+      }
+      return err(new Error(
+        'We could not complete a required security check right now. ' +
+        'No payment has been taken. Please try again in a few minutes.',
+      ))
     }
   }
 }

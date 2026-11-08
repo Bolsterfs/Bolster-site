@@ -20,7 +20,7 @@ This policy applies to all Bolster employees, contractors, and agents.
 ## 2. Money Laundering Reporting Officer (MLRO)
 
 **MLRO**: [Name]  
-**Contact**: mlro@bolster.io  
+**Contact**: mlro@bolsterfs.co.uk  
 **Responsibilities**:
 - Receiving and evaluating internal Suspicious Activity Reports (SARs)
 - Filing SARs to the National Crime Agency (NCA) via goAML where required

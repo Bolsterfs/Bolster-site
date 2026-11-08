@@ -5,6 +5,7 @@ import { debts, invites, users } from '../../db/schema/index.js'
 import { authenticate } from '../hooks/auth.hook.js'
 import { generateInviteToken } from '../../services/invite/invite.service.js'
 import { env } from '../../config/env.js'
+import { paymentService } from '../../services/payment/payment.service.js'
 import type { JwtPayload } from '../../types/index.js'
 
 /**
@@ -124,5 +125,34 @@ export async function devRoutes(app: FastifyInstance) {
       .where(eq(users.id, user.sub))
 
     return reply.send({ success: true, data: { kycStatus: 'approved' } })
+  })
+
+  // ── POST /api/v1/dev/verify-debts ─────────────────────────────────────────
+  // Bypasses the creditor account check (Confirmation of Payee) for the
+  // current user's debts, so debts added through the app can be paid while
+  // testing. There is no real payee check yet — outside development, debts
+  // stay unverified and unpayable until one exists.
+  app.post('/verify-debts', { preHandler: [authenticate] }, async (request, reply) => {
+    const user = request.user as JwtPayload
+    const now  = new Date()
+
+    const verified = await db
+      .update(debts)
+      .set({ copVerified: true, copVerifiedAt: now, updatedAt: now })
+      .where(and(
+        eq(debts.userId, user.sub),
+        eq(debts.copVerified, false),
+      ))
+      .returning({ id: debts.id })
+
+    return reply.send({ success: true, data: { verifiedCount: verified.length } })
+  })
+
+  // Runs the Stripe reconciliation sweep immediately instead of waiting for
+  // the timer. Useful after a test payment made while the Stripe listener was
+  // not running — the payment settles from Stripe's own record.
+  app.post('/reconcile-stripe', { preHandler: [authenticate] }, async (_request, reply) => {
+    const summary = await paymentService.reconcilePendingStripePayments()
+    return reply.send({ success: true, data: summary })
   })
 }

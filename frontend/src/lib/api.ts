@@ -39,7 +39,7 @@ export function clearTokens() {
 async function apiFetch<T>(
   path:    string,
   options: RequestInit = {},
-): Promise<{ data: T; ok: true } | { error: string; ok: false }> {
+): Promise<{ data: T; ok: true } | { error: string; code?: string; ok: false }> {
   const headers: Record<string, string> = {
     ...(options.body !== undefined && options.body !== null
       ? { 'Content-Type': 'application/json' }
@@ -57,10 +57,14 @@ async function apiFetch<T>(
       headers,
     })
 
-    const json = await response.json() as { success: boolean; data?: T; error?: string }
+    const json = await response.json() as { success: boolean; data?: T; error?: string; code?: string }
 
     if (!response.ok || !json.success) {
-      return { ok: false, error: json.error ?? `Request failed: ${response.status}` }
+      return {
+        ok:    false,
+        error: json.error ?? `Request failed: ${response.status}`,
+        ...(json.code ? { code: json.code } : {}),
+      }
     }
 
     return { ok: true, data: json.data as T }
@@ -113,6 +117,29 @@ export const auth = {
       body:   JSON.stringify({ refreshToken }),
     })
   },
+
+  /** Ask for a password reset link. Always succeeds, whether or not the email has an account. */
+  async forgotPassword(email: string) {
+    return apiFetch<{ message: string }>('/auth/forgot-password', {
+      method: 'POST',
+      body:   JSON.stringify({ email }),
+    })
+  },
+
+  /** Check a reset link is still usable before showing the new-password form. */
+  async validateResetToken(token: string) {
+    return apiFetch<{ valid: boolean }>('/auth/reset-password/validate', {
+      method: 'POST',
+      body:   JSON.stringify({ token }),
+    })
+  },
+
+  async resetPassword(token: string, password: string) {
+    return apiFetch<{ message: string }>('/auth/reset-password', {
+      method: 'POST',
+      body:   JSON.stringify({ token, password }),
+    })
+  },
 }
 
 // ── Debts ─────────────────────────────────────────────────────────────────────
@@ -130,15 +157,55 @@ export interface Debt {
 export const debtApi = {
   list: () => apiFetch<Debt[]>('/debts'),
 
+  /** Add a debt owed to a creditor on Bolster's vetted list. No bank details are sent. */
   create: (data: {
-    creditorName:     string
-    creditorSortCode: string
-    creditorAccount:  string
-    creditorRef?:     string
+    creditorId:       string
+    creditorRef:      string
     totalAmountPence: number
   }) => apiFetch<Debt>('/debts', { method: 'POST', body: JSON.stringify(data) }),
 
   delete: (id: string) => apiFetch(`/debts/${id}`, { method: 'DELETE' }),
+
+  /** Whether bill scanning is switched on for this installation. */
+  scanStatus: () => apiFetch<{ enabled: boolean }>('/debts/scan/status'),
+
+  /** Read a photo or PDF of a bill. Returns details to CHECK — nothing is saved. */
+  scanBill: (file: { mediaType: BillMediaType; data: string }) =>
+    apiFetch<BillScanResult>('/debts/scan', { method: 'POST', body: JSON.stringify(file) }),
+}
+
+export type BillMediaType = 'image/jpeg' | 'image/png' | 'image/webp' | 'application/pdf'
+
+export interface BillScanResult {
+  isBill:             boolean
+  creditorNameOnBill: string | null
+  matchedCreditor:    Creditor | null   // null when the creditor is not on our list
+  amountPence:        number | null
+  reference:          string | null
+  dueDate:            string | null     // YYYY-MM-DD
+  warnings:           string[]
+}
+
+// ── Creditors (Bolster's vetted list) ─────────────────────────────────────────
+
+export interface Creditor {
+  id:             string
+  name:           string
+  category:       string
+  referenceLabel: string         // what the reference is called on this creditor's bills
+  referenceHint:  string | null  // where to find it
+  isTestData:     boolean
+}
+
+export const creditorApi = {
+  list: () => apiFetch<Creditor[]>('/creditors'),
+
+  /** Ask Bolster to add a creditor that is not on the list yet. */
+  request: (data: { creditorName: string; note?: string }) =>
+    apiFetch<{ id: string; creditorName: string; status: string }>('/creditors/requests', {
+      method: 'POST',
+      body:   JSON.stringify(data),
+    }),
 }
 
 // ── Invites ───────────────────────────────────────────────────────────────────
@@ -169,6 +236,7 @@ export interface ResolvedInvite {
   debts:                 ResolvedInviteDebt[]
   inviteMaxAmountPence?: number
   expiresAt:             string
+  paymentMethod?:        'card' | 'bank_transfer'
 }
 
 export const inviteApi = {
@@ -204,20 +272,48 @@ export interface PaymentInitiation {
   netAmountPence:   number
 }
 
+/** Fee rules in force — lets the checkout explain the fee in plain words. */
+export interface FeePolicy {
+  percentage:      number
+  minFeePence:     number
+  maxFeePence:     number
+  minPaymentPence: number
+  maxPaymentPence: number
+}
+
+/** Exact breakdown for an amount, calculated by the server. */
+export interface PaymentQuote {
+  netAmountPence:   number   // creditor receives
+  feeAmountPence:   number   // Bolster fee
+  grossAmountPence: number   // contributor pays
+  feePolicy:        FeePolicy
+  paymentMethod:    'card' | 'bank_transfer'
+}
+
 export interface PaymentStatus {
   status:         string
   netAmountPence: number
   settledAt?:     string
   createdAt:      string
+  paymentMethod?: 'card' | 'bank_transfer'
 }
 
 export const paymentApi = {
+  /** Fee breakdown for an amount — shown before the contributor commits. */
+  quote: (amountPence: number, signal?: AbortSignal) =>
+    apiFetch<PaymentQuote>(
+      `/payments/quote?amountPence=${encodeURIComponent(amountPence)}`,
+      signal ? { signal } : {},
+    ),
+
   initiate: (data: {
     inviteToken:      string
     debtId:           string
     amountPence:      number
     contributorEmail: string
     contributorName:  string
+    /** The total the contributor was shown — the server refuses if it differs. */
+    expectedGrossAmountPence?: number
   }) => apiFetch<PaymentInitiation>('/payments/initiate', {
     method: 'POST',
     body:   JSON.stringify(data),
@@ -266,6 +362,16 @@ export const devApi = {
   approveKyc: () => apiFetch<{ kycStatus: string }>('/dev/approve-kyc', {
     method: 'POST',
   }),
+  /** DEV ONLY — marks the signed-in user's unverified debts as verified. */
+  verifyDebts: () => apiFetch<{ verifiedCount: number }>('/dev/verify-debts', {
+    method: 'POST',
+  }),
+  /** DEV ONLY — asks Stripe about every pending card payment right now. */
+  reconcileStripe: () =>
+    apiFetch<{ checked: number; settled: number; expired: number; unknown: number }>(
+      '/dev/reconcile-stripe',
+      { method: 'POST' },
+    ),
 }
 
 // ── Utilities ─────────────────────────────────────────────────────────────────

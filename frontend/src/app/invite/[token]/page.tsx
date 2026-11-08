@@ -27,6 +27,8 @@ export default function InvitePage() {
           setError('This invite link is no longer valid.')
           return
         }
+        console.log('[invite] Resolved invite data:', JSON.stringify(body.data, null, 2))
+        console.log('[invite] Number of debts returned:', body.data.debts.length)
         setInvite(body.data)
         // Auto-select if only one debt
         if (body.data.debts.length === 1) {
@@ -184,11 +186,18 @@ export default function InvitePage() {
 
           {/* Trust signals */}
           <div className="mt-8 flex flex-col gap-2">
-            {[
-              '🔒 Your bank details are never stored by Bolster',
-              '⚡ Payment settles in ~90 seconds via Faster Payments',
-              '✅ Money goes directly to the creditor — not to the recipient',
-            ].map((line) => (
+            {(invite.paymentMethod === 'bank_transfer'
+              ? [
+                  '🔒 Your bank details are never stored by Bolster',
+                  '⚡ Payment settles in ~90 seconds via Faster Payments',
+                  '✅ Money goes directly to the creditor — not to the recipient',
+                ]
+              : [
+                  '🔒 Your card details are entered on a secure checkout and never stored by Bolster',
+                  '⚡ You\u2019ll get an email confirmation as soon as your payment goes through',
+                  '✅ Money goes to the creditor — not to the recipient',
+                ]
+            ).map((line) => (
               <p key={line} className="text-xs text-mid-gray flex items-start gap-2">
                 {line}
               </p>
