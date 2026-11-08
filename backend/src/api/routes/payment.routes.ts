@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify'
-import { eq } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 import { db } from '../../db/client.js'
-import { payments } from '../../db/schema/index.js'
+import { payments, debts } from '../../db/schema/index.js'
 import { initiatePaymentSchema, quotePaymentSchema, QuoteChangedError } from '../../types/index.js'
 import { paymentService } from '../../services/payment/payment.service.js'
 import { calculateFee, getFeePolicy, validatePaymentAmount } from '../../utils/fees.js'
@@ -140,12 +140,24 @@ export async function paymentRoutes(app: FastifyInstance) {
         }
       }
 
+      // The creditor name makes the receipt meaningful ("£50 to British Gas").
+      // It is not the recipient's personal data, and the page is reached only by
+      // the contributor's own unguessable payment ID.
+      const debt = await db.query.debts.findFirst({
+        where:   eq(debts.id, payment.debtId),
+        columns: { creditorName: true },
+      })
+
       // Return minimal public status — no PII
       return reply.send({
         success: true,
         data: {
           status:           payment.status,
+          reference:        payment.id.slice(0, 8).toUpperCase(),
+          creditorName:     debt?.creditorName ?? 'the creditor',
           netAmountPence:   payment.netAmountPence,
+          feeAmountPence:   payment.feeAmountPence,
+          grossAmountPence: payment.grossAmountPence,
           settledAt:        payment.settledAt,
           createdAt:        payment.createdAt,
           // How THIS payment was made: bank payments carry a TrueLayer ID,
@@ -157,14 +169,47 @@ export async function paymentRoutes(app: FastifyInstance) {
   )
 
   // ── GET /api/v1/payments — recipient views their payment history ──────────
+  // Shaped for the dashboard: which bill, who helped, what they paid and what
+  // the creditor received. Deliberately NOT the raw row — that carries the
+  // contributor's email address, IP and the Stripe redirect URL, none of which
+  // the recipient should see.
   app.get('/', { preHandler: [authenticate] }, async (request, reply) => {
     const user = request.user as JwtPayload
 
-    const userPayments = await db.query.payments.findMany({
-      where: eq(payments.recipientUserId, user.sub),
-      orderBy: (p, { desc }) => [desc(p.createdAt)],
-    })
+    const rows = await db
+      .select({
+        id:               payments.id,
+        debtId:           payments.debtId,
+        creditorName:     debts.creditorName,
+        contributorName:  payments.contributorName,
+        grossAmountPence: payments.grossAmountPence,
+        feeAmountPence:   payments.feeAmountPence,
+        netAmountPence:   payments.netAmountPence,
+        status:           payments.status,
+        truelayerPaymentId: payments.truelayerPaymentId,
+        settledAt:        payments.settledAt,
+        createdAt:        payments.createdAt,
+      })
+      .from(payments)
+      .innerJoin(debts, eq(debts.id, payments.debtId))
+      .where(eq(payments.recipientUserId, user.sub))
+      .orderBy(desc(payments.createdAt))
 
-    return reply.send({ success: true, data: userPayments })
+    const data = rows.map((r) => ({
+      id:               r.id,
+      reference:        r.id.slice(0, 8).toUpperCase(),
+      debtId:           r.debtId,
+      creditorName:     r.creditorName,
+      contributorName:  r.contributorName,
+      grossAmountPence: r.grossAmountPence,
+      feeAmountPence:   r.feeAmountPence,
+      netAmountPence:   r.netAmountPence,
+      status:           r.status,
+      paymentMethod:    r.truelayerPaymentId ? 'bank_transfer' : 'card',
+      settledAt:        r.settledAt,
+      createdAt:        r.createdAt,
+    }))
+
+    return reply.send({ success: true, data })
   })
 }

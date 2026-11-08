@@ -36,6 +36,13 @@
       "when": 1794168000000,
       "tag": "0004_stripe_reconciliation",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1794175200000,
+      "tag": "0005_admin_creditor_requests",
+      "breakpoints": true
     }
   ]
 }

@@ -54,6 +54,12 @@ const envSchema = z.object({
   ANTHROPIC_API_KEY: z.string().optional(),
   BILL_SCAN_MODEL:   z.string().min(1).default('claude-haiku-4-5-20251001'),
 
+  // Staff who may use the admin screens (comma-separated emails, case-insensitive).
+  // Empty means nobody — the admin routes return 403 for everyone.
+  ADMIN_EMAILS: z.string().default('').transform((v) =>
+    v.split(',').map((e) => e.trim().toLowerCase()).filter(Boolean),
+  ),
+
   // App
   APP_URL: z.string().url(),
   API_URL: z.string().url(),

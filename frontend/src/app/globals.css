@@ -100,3 +100,13 @@
            focus-visible:ring-2 focus-visible:ring-[#0F8B72] focus-visible:ring-offset-2;
   }
 }
+
+/* Printed receipt (payment/complete): the dark theme wastes ink and prints
+   badly, so flatten everything to black on white and show only the receipt. */
+@media print {
+  body, main, .bg-navy { background: #fff !important; color: #000 !important; }
+  .text-white, .text-mid-gray, .text-teal-400 { color: #000 !important; }
+  .card { background: #fff !important; border-color: #999 !important; }
+  .border-blue-900\/40 { border-color: #ccc !important; }
+  .text-5xl { display: none; }
+}

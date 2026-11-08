@@ -36,6 +36,7 @@ function PaymentCompleteContent() {
 
   const [phase, setPhase] = useState<Phase>('checking')
   const [status, setStatus] = useState<PaymentStatus | null>(null)
+  const [copied, setCopied] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
 
   // Refs so the polling loop never re-triggers the effect
@@ -175,28 +176,66 @@ function PaymentCompleteContent() {
           <>
             <h1 className="text-2xl font-bold text-white mb-3">Payment confirmed</h1>
             <p className="text-mid-gray mb-6">
-              {formatPence(status.netAmountPence)} {paidByBank ? 'went directly to' : 'has been paid to'} the creditor.
+              {formatPence(status.netAmountPence)} {paidByBank ? 'went directly to' : 'has been paid to'}{' '}
+              <strong className="text-white">{status.creditorName}</strong>.
               You&apos;ll receive a confirmation email shortly.
             </p>
-            <div className="card text-left">
+
+            {/* Receipt — printable, and this page stays at this URL so it can be revisited */}
+            <div className="card text-left" id="receipt">
+              <p className="text-xs uppercase tracking-wide text-mid-gray mb-2">Receipt</p>
               <div className="flex justify-between py-2">
-                <span className="text-mid-gray text-sm">Amount paid</span>
+                <span className="text-mid-gray text-sm">To {status.creditorName}</span>
                 <span className="text-white font-medium">{formatPence(status.netAmountPence)}</span>
               </div>
               <div className="flex justify-between py-2">
-                <span className="text-mid-gray text-sm">Settled</span>
+                <span className="text-mid-gray text-sm">Bolster fee</span>
+                <span className="text-white text-sm">{formatPence(status.feeAmountPence)}</span>
+              </div>
+              <div className="flex justify-between py-2 border-t border-blue-900/40 mt-1">
+                <span className="text-white text-sm font-semibold">Total charged</span>
+                <span className="text-white font-semibold">{formatPence(status.grossAmountPence)}</span>
+              </div>
+              <div className="flex justify-between py-2">
+                <span className="text-mid-gray text-sm">Paid by</span>
+                <span className="text-white text-sm">{paidByBank ? 'Bank transfer' : 'Card'}</span>
+              </div>
+              <div className="flex justify-between py-2">
+                <span className="text-mid-gray text-sm">Date</span>
                 <span className="text-white text-sm">
-                  {status.settledAt
-                    ? new Date(status.settledAt).toLocaleTimeString('en-GB')
-                    : 'Just now'}
+                  {new Date(status.settledAt ?? status.createdAt).toLocaleString('en-GB', {
+                    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+                  })}
                 </span>
               </div>
               <div className="flex justify-between py-2">
                 <span className="text-mid-gray text-sm">Reference</span>
-                <span className="text-white text-sm font-mono">{shortRef}</span>
+                <span className="text-white text-sm font-mono">{status.reference || shortRef}</span>
               </div>
             </div>
-            <p className="text-xs text-mid-gray mt-6 leading-relaxed">
+
+            <div className="flex gap-2 mt-4 print:hidden">
+              <button
+                type="button"
+                className="btn-secondary text-sm py-2 flex-1"
+                onClick={() => window.print()}
+              >
+                Save or print receipt
+              </button>
+              <button
+                type="button"
+                className="btn-secondary text-sm py-2 flex-1"
+                onClick={() => {
+                  void navigator.clipboard.writeText(window.location.href)
+                  setCopied(true)
+                  setTimeout(() => setCopied(false), 1500)
+                }}
+              >
+                {copied ? 'Link copied' : 'Copy receipt link'}
+              </button>
+            </div>
+
+            <p className="text-xs text-mid-gray mt-6 leading-relaxed print:hidden">
               The person you helped will receive a notification that their debt has been reduced.
               Thank you for stepping in. 💙
             </p>

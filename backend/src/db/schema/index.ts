@@ -74,6 +74,8 @@ export const auditEventTypeEnum = pgEnum('audit_event_type', [
   'password_reset_completed',
   'creditor_requested',
   'bill_scanned',
+  'creditor_added',
+  'creditor_request_declined',
 ])
 
 // ─── Users (recipients) ───────────────────────────────────────────────────────

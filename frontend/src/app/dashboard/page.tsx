@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { debtApi, inviteApi, paymentApi, formatPence, clearAllTokens } from '../../lib/api'
-import type { Debt, Invite, PaymentStatus } from '../../lib/api'
+import { debtApi, inviteApi, paymentApi, adminApi, formatPence, clearAllTokens } from '../../lib/api'
+import type { Debt, Invite, PaymentHistoryItem } from '../../lib/api'
 import { useRequireAuth } from '../../lib/useRequireAuth'
 
 export default function DashboardPage() {
@@ -13,9 +13,10 @@ export default function DashboardPage() {
 
   const [debts,    setDebts]    = useState<Debt[]>([])
   const [invites,  setInvites]  = useState<Invite[]>([])
-  const [payments, setPayments] = useState<PaymentStatus[]>([])
+  const [payments, setPayments] = useState<PaymentHistoryItem[]>([])
   const [loading,  setLoading]  = useState(true)
   const [tab,      setTab]      = useState<'debts' | 'invites' | 'history'>('debts')
+  const [isAdmin,  setIsAdmin]  = useState(false)
 
   useEffect(() => {
     if (isChecking) return
@@ -29,6 +30,8 @@ export default function DashboardPage() {
       if (i.ok) setInvites(i.data)
       if (p.ok) setPayments(p.data)
       setLoading(false)
+      // Quiet check — almost everyone gets a 403 here and never sees the link
+      void adminApi.me().then((r) => setIsAdmin(r.ok))
     }
     void loadAll()
   }, [isChecking])
@@ -59,13 +62,23 @@ export default function DashboardPage() {
       <header className="px-4 py-4 border-b border-blue-900/40">
         <div className="max-w-lg mx-auto flex items-center justify-between">
           <span className="text-white font-bold text-xl tracking-wide">BOLSTER</span>
-          <button
-            type="button"
-            className="text-mid-gray text-sm hover:text-white transition-colors"
-            onClick={handleSignOut}
-          >
-            Sign out
-          </button>
+          <div className="flex items-center gap-4">
+            {isAdmin && (
+              <Link
+                href="/admin/creditor-requests"
+                className="text-xs font-semibold uppercase tracking-wide text-orange-300 hover:text-orange-200 transition-colors"
+              >
+                Admin
+              </Link>
+            )}
+            <button
+              type="button"
+              className="text-mid-gray text-sm hover:text-white transition-colors"
+              onClick={handleSignOut}
+            >
+              Sign out
+            </button>
+          </div>
         </div>
       </header>
 
@@ -233,22 +246,17 @@ export default function DashboardPage() {
               <EmptyState
                 icon="📊"
                 title="No payments yet"
-                description="Payments made through your invite links will appear here."
+                description="When someone pays towards one of your bills, it will show here with who helped and how much reached the creditor."
               />
             ) : (
-              payments.map((payment, i) => (
-                <div key={i} className="card flex justify-between items-center">
-                  <div>
-                    <p className="text-white font-medium">{formatPence(payment.netAmountPence)}</p>
-                    <p className="text-xs text-mid-gray mt-0.5">
-                      {payment.settledAt
-                        ? new Date(payment.settledAt).toLocaleDateString('en-GB')
-                        : new Date(payment.createdAt).toLocaleDateString('en-GB')}
-                    </p>
-                  </div>
-                  <StatusBadge status={payment.status} />
-                </div>
-              ))
+              <>
+                <p className="text-xs text-mid-gray px-1">
+                  {describeHistory(payments)}
+                </p>
+                {payments.map((payment) => (
+                  <PaymentHistoryCard key={payment.id} payment={payment} />
+                ))}
+              </>
             )}
           </div>
         )}
@@ -258,6 +266,66 @@ export default function DashboardPage() {
 }
 
 // ── Helper components ─────────────────────────────────────────────────────────
+
+/** "3 payments · £150.00 reached your creditors" — one line of context above the list. */
+function describeHistory(payments: PaymentHistoryItem[]): string {
+  const settled = payments.filter((p) => p.status === 'settled')
+  const reached = settled.reduce((s, p) => s + p.netAmountPence, 0)
+  if (settled.length === 0) return `${payments.length} payment${payments.length === 1 ? '' : 's'} started — none completed yet`
+  return `${settled.length} completed payment${settled.length === 1 ? '' : 's'} · ${formatPence(reached)} reached your creditors`
+}
+
+const PAYMENT_STATUS_COPY: Record<string, string> = {
+  settled:   'Paid to creditor',
+  pending:   'Waiting for confirmation',
+  initiated: 'Started, not completed',
+  failed:    'Payment failed — nothing was taken',
+  expired:   'Checkout not completed',
+  refunded:  'Refunded',
+}
+
+function PaymentHistoryCard({ payment }: { payment: PaymentHistoryItem }) {
+  const when = payment.settledAt ?? payment.createdAt
+  const date = new Date(when).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  const isSettled = payment.status === 'settled'
+
+  return (
+    <div className="card">
+      <div className="flex justify-between items-start gap-3">
+        <div className="min-w-0">
+          <p className="font-semibold text-white truncate">
+            {payment.contributorName} <span className="font-normal text-mid-gray">→</span> {payment.creditorName}
+          </p>
+          <p className="text-xs text-mid-gray mt-0.5">
+            {date} · {PAYMENT_STATUS_COPY[payment.status] ?? payment.status.replace(/_/g, ' ')}
+          </p>
+        </div>
+        <p className={`text-lg font-bold whitespace-nowrap ${isSettled ? 'text-teal-400' : 'text-mid-gray'}`}>
+          {formatPence(payment.netAmountPence)}
+        </p>
+      </div>
+
+      {isSettled && (
+        <div className="mt-3 pt-3 border-t border-blue-900/40 grid grid-cols-3 gap-2 text-xs">
+          <div>
+            <p className="text-mid-gray">To creditor</p>
+            <p className="text-white font-medium">{formatPence(payment.netAmountPence)}</p>
+          </div>
+          <div>
+            <p className="text-mid-gray">Bolster fee</p>
+            <p className="text-white font-medium">{formatPence(payment.feeAmountPence)}</p>
+          </div>
+          <div>
+            <p className="text-mid-gray">{payment.contributorName.split(' ')[0]} paid</p>
+            <p className="text-white font-medium">{formatPence(payment.grossAmountPence)}</p>
+          </div>
+        </div>
+      )}
+
+      <p className="text-[11px] text-mid-gray mt-2 font-mono">Ref {payment.reference}</p>
+    </div>
+  )
+}
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, string> = {

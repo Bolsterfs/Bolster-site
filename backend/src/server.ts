@@ -13,6 +13,7 @@ import { webhookRoutes } from './api/routes/webhook.routes.js'
 import { healthRoutes } from './api/routes/health.routes.js'
 import { devRoutes } from './api/routes/dev.routes.js'
 import { creditorRoutes } from './api/routes/creditor.routes.js'
+import { adminRoutes } from './api/routes/admin.routes.js'
 import { ensureTestCreditors } from './db/test-creditors.js'
 import { paymentService } from './services/payment/payment.service.js'
 
@@ -59,6 +60,7 @@ await server.register(creditorRoutes, { prefix: '/api/v1/creditors' })
 await server.register(kycRoutes,     { prefix: '/api/v1/kyc' })
 await server.register(inviteRoutes,  { prefix: '/api/v1/invites' })
 await server.register(paymentRoutes, { prefix: '/api/v1/payments' })
+await server.register(adminRoutes,   { prefix: '/api/v1/admin' })   // staff only — see ADMIN_EMAILS
 await server.register(webhookRoutes, { prefix: '/webhooks' })  // no auth — signature verified per-handler
 
 if (env.NODE_ENV === 'development') {

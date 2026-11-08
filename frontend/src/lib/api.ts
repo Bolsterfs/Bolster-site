@@ -208,6 +208,52 @@ export const creditorApi = {
     }),
 }
 
+// ── Admin (Bolster staff only) ────────────────────────────────────────────────
+
+export interface CreditorRequest {
+  id:                string
+  creditorName:      string
+  note:              string | null
+  status:            'open' | 'added' | 'declined'
+  createdAt:         string
+  updatedAt:         string
+  requesterName:     string
+  requesterEmail:    string
+  othersAskingCount: number
+}
+
+export interface NewCreditorInput {
+  name:             string
+  category:         'energy' | 'water' | 'council' | 'telecoms' | 'lender' | 'bnpl' | 'other'
+  aliases:          string[]
+  sortCode:         string
+  accountNumber:    string
+  referenceLabel:   string
+  referenceHint?:   string
+  verifiedBy:       string
+  verificationNote: string
+}
+
+export const adminApi = {
+  /** 403 for anyone not in ADMIN_EMAILS — used to decide whether to show the admin link. */
+  me: () => apiFetch<{ email: string; isAdmin: boolean }>('/admin/me'),
+
+  creditorRequests: (status: 'open' | 'resolved' | 'all' = 'open') =>
+    apiFetch<CreditorRequest[]>(`/admin/creditor-requests?status=${status}`),
+
+  addCreditor: (requestId: string, creditor: NewCreditorInput) =>
+    apiFetch<{ creditorId: string; name: string; resolvedRequests: number }>(
+      `/admin/creditor-requests/${requestId}/add-creditor`,
+      { method: 'POST', body: JSON.stringify(creditor) },
+    ),
+
+  declineRequest: (requestId: string, reason: string) =>
+    apiFetch<{ id: string; status: string }>(
+      `/admin/creditor-requests/${requestId}/decline`,
+      { method: 'POST', body: JSON.stringify({ reason }) },
+    ),
+}
+
 // ── Invites ───────────────────────────────────────────────────────────────────
 
 export interface Invite {
@@ -291,11 +337,31 @@ export interface PaymentQuote {
 }
 
 export interface PaymentStatus {
-  status:         string
-  netAmountPence: number
-  settledAt?:     string
-  createdAt:      string
-  paymentMethod?: 'card' | 'bank_transfer'
+  status:           string
+  reference:        string
+  creditorName:     string
+  netAmountPence:   number
+  feeAmountPence:   number
+  grossAmountPence: number
+  settledAt?:       string | null
+  createdAt:        string
+  paymentMethod?:   'card' | 'bank_transfer'
+}
+
+/** One row of the recipient's payment history (never includes contributor contact details). */
+export interface PaymentHistoryItem {
+  id:               string
+  reference:        string
+  debtId:           string
+  creditorName:     string
+  contributorName:  string
+  grossAmountPence: number
+  feeAmountPence:   number
+  netAmountPence:   number
+  status:           string
+  paymentMethod:    'card' | 'bank_transfer'
+  settledAt?:       string | null
+  createdAt:        string
 }
 
 export const paymentApi = {
@@ -322,7 +388,7 @@ export const paymentApi = {
   getStatus: (paymentId: string) =>
     apiFetch<PaymentStatus>(`/payments/${paymentId}/status`),
 
-  list: () => apiFetch<PaymentStatus[]>('/payments'),
+  list: () => apiFetch<PaymentHistoryItem[]>('/payments'),
 }
 
 // ── KYC ───────────────────────────────────────────────────────────────────────

@@ -1,4 +1,8 @@
 import type { FastifyRequest, FastifyReply } from 'fastify'
+import { eq } from 'drizzle-orm'
+import { db } from '../../db/client.js'
+import { users } from '../../db/schema/index.js'
+import { env } from '../../config/env.js'
 import type { JwtPayload } from '../../types/index.js'
 
 /**
@@ -43,3 +47,26 @@ export async function requireKyc(
   }
 }
 
+
+/**
+ * Admin gate — the signed-in user's CURRENT email (from the database, not the
+ * token, so a change takes effect at once) must be listed in ADMIN_EMAILS.
+ * Apply AFTER authenticate. Answers 403 with no hint about who is an admin.
+ */
+export async function requireAdmin(
+  request: FastifyRequest,
+  reply:   FastifyReply,
+): Promise<void> {
+  const payload = request.user as JwtPayload
+  const user = await db.query.users.findFirst({
+    where:   eq(users.id, payload.sub),
+    columns: { email: true },
+  })
+  if (!user || !env.ADMIN_EMAILS.includes(user.email.toLowerCase())) {
+    return reply.status(403).send({
+      success: false,
+      error:   'Not available',
+      code:    'FORBIDDEN',
+    })
+  }
+}
