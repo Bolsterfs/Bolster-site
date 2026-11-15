@@ -48,9 +48,10 @@ export class StripePaymentService {
       if (!env.STRIPE_SECRET_KEY) {
         throw new Error('STRIPE_SECRET_KEY is not configured')
       }
-      this.stripe = new Stripe(env.STRIPE_SECRET_KEY, {
-        apiVersion: '2026-03-25.dahlia',
-      })
+      // No explicit apiVersion: the SDK pins the API version it was built
+      // for. Hard-coding one broke the build whenever the installed SDK
+      // was newer than the laptop's (each release accepts only its own string).
+      this.stripe = new Stripe(env.STRIPE_SECRET_KEY)
     }
     return this.stripe
   }
