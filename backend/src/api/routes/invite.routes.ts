@@ -1,8 +1,24 @@
 import type { FastifyInstance } from 'fastify'
+import { InviteUnavailableError } from '../../types/index.js'
+
+const CATEGORY_LABEL: Record<string, string> = {
+  energy:   'Energy bill',
+  water:    'Water bill',
+  council:  'Council bill',
+  telecoms: 'Phone or broadband bill',
+  lender:   'Loan or credit card',
+  bnpl:     'Buy-now-pay-later balance',
+}
+
+/** "Energy bill", or "Bill 2 of 3" when the category isn't known. */
+function neutralBillLabel(category: string | null | undefined, index: number, total: number): string {
+  const base = (category && CATEGORY_LABEL[category]) ?? 'Bill'
+  return total > 1 ? `${base} ${index + 1} of ${total}` : base
+}
 import { env } from '../../config/env.js'
-import { eq } from 'drizzle-orm'
+import { eq, inArray } from 'drizzle-orm'
 import { db } from '../../db/client.js'
-import { invites } from '../../db/schema/index.js'
+import { invites, creditors } from '../../db/schema/index.js'
 import { createInviteSchema } from '../../types/index.js'
 import { authenticate, requireKyc } from '../hooks/auth.hook.js'
 import { inviteService } from '../../services/invite/invite.service.js'
@@ -22,25 +38,47 @@ export async function inviteRoutes(app: FastifyInstance) {
       )
 
       if (!result.ok) {
-        return reply.status(404).send({
+        const e = result.error
+        const unavailable = e instanceof InviteUnavailableError ? e : null
+        return reply.status(unavailable && unavailable.code !== 'INVITE_INVALID' ? 410 : 404).send({
           success: false,
-          error:   result.error.message,
+          error:   e.message,
+          code:    unavailable?.code ?? 'INVITE_INVALID',
+          data:    unavailable?.recipientFirstName
+            ? { recipientFirstName: unavailable.recipientFirstName }
+            : undefined,
         })
       }
 
       const { invite, debts: eligibleDebts, recipient } = result.value
 
-      // Filter debt data based on privacy level — never over-expose
-      const publicDebts = eligibleDebts.map((d) => ({
+      // Filter debt data based on privacy level — never over-expose.
+      // 'amount_only' hides WHO is owed but always shows HOW MUCH is left: the
+      // helper needs a figure to choose an amount, and the overpayment cap
+      // depends on it. Without the creditor name we send a neutral label
+      // ("Energy bill") so several bills can still be told apart.
+      // Category comes from the vetted creditor row (legacy debts have none)
+      const creditorIds = eligibleDebts.map((d) => d.creditorId).filter((id): id is string => !!id)
+      const categoryById = new Map<string, string>()
+      if (invite.privacyLevel === 'amount_only' && creditorIds.length > 0) {
+        const rows = await db
+          .select({ id: creditors.id, category: creditors.category })
+          .from(creditors)
+          .where(inArray(creditors.id, creditorIds))
+        for (const r of rows) categoryById.set(r.id, r.category)
+      }
+
+      const publicDebts = eligibleDebts.map((d, i) => ({
         id: d.id,
         creditorName:
           invite.privacyLevel !== 'amount_only'
             ? d.creditorName
             : undefined,
-        remainingAmountPence:
+        label:
           invite.privacyLevel !== 'amount_only'
-            ? d.totalAmountPence - d.paidAmountPence
-            : undefined,
+            ? d.creditorName
+            : neutralBillLabel(d.creditorId ? categoryById.get(d.creditorId) : null, i, eligibleDebts.length),
+        remainingAmountPence: Math.max(0, d.totalAmountPence - d.paidAmountPence),
       }))
 
       return reply.send({

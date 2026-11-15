@@ -4,7 +4,7 @@ import { db } from '../../db/client.js'
 import { invites, debts, users } from '../../db/schema/index.js'
 import type { Invite, Debt, User } from '../../db/schema/index.js'
 import type { CreateInviteInput, Result } from '../../types/index.js'
-import { ok, err } from '../../types/index.js'
+import { ok, err, InviteUnavailableError } from '../../types/index.js'
 import { env } from '../../config/env.js'
 import { writeAuditEvent } from '../../utils/audit.js'
 
@@ -174,7 +174,7 @@ export class InviteService {
   ): Promise<Result<InviteWithContext>> {
     const inviteId = verifyInviteToken(token)
     if (!inviteId) {
-      return err(new Error('Invalid or tampered invite link'))
+      return err(new InviteUnavailableError('INVITE_INVALID', 'Invalid or tampered invite link'))
     }
 
     const invite = await db.query.invites.findFirst({
@@ -185,29 +185,35 @@ export class InviteService {
     })
 
     if (!invite) {
-      return err(new Error('Invite not found'))
+      return err(new InviteUnavailableError('INVITE_INVALID', 'Invite not found'))
     }
 
-    if (invite.status !== 'active') {
-      return err(new Error(`This invite is ${invite.status}`))
-    }
-
-    if (new Date() > invite.expiresAt) {
-      // Mark as expired
-      await db
-        .update(invites)
-        .set({ status: 'expired', updatedAt: new Date() })
-        .where(eq(invites.id, invite.id))
-      return err(new Error('This invite has expired'))
-    }
-
-    // Fetch recipient
+    // Fetch recipient first so unavailable-states can name them ("ask Leon for a new link")
     const user = await db.query.users.findFirst({
       where: eq(users.id, invite.userId),
     })
 
     if (!user) {
-      return err(new Error('Invite data incomplete'))
+      return err(new InviteUnavailableError('INVITE_INVALID', 'Invite data incomplete'))
+    }
+
+    if (invite.status === 'revoked') {
+      return err(new InviteUnavailableError('INVITE_REVOKED', 'This invite has been withdrawn', user.firstName))
+    }
+    if (invite.status === 'fully_paid') {
+      return err(new InviteUnavailableError('INVITE_FULLY_PAID', 'This bill has already been paid in full', user.firstName))
+    }
+    if (invite.status === 'expired' || new Date() > invite.expiresAt) {
+      if (invite.status !== 'expired') {
+        await db
+          .update(invites)
+          .set({ status: 'expired', updatedAt: new Date() })
+          .where(eq(invites.id, invite.id))
+      }
+      return err(new InviteUnavailableError('INVITE_EXPIRED', 'This invite has expired', user.firstName))
+    }
+    if (invite.status !== 'active') {
+      return err(new InviteUnavailableError('INVITE_INVALID', `This invite is ${invite.status}`))
     }
 
     // Fetch debt context: single debt if invite is debt-specific,
@@ -231,10 +237,6 @@ export class InviteService {
         ),
       })
       eligibleDebts = allDebts.filter(d => d.status !== 'resolved')
-      console.log('[invite:resolve] User-level invite — found debts:', eligibleDebts.map(d => ({
-        id: d.id, creditorName: d.creditorName, status: d.status, copVerified: d.copVerified,
-        remaining: d.totalAmountPence - d.paidAmountPence,
-      })))
     }
 
     // Increment open count

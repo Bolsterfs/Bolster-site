@@ -177,6 +177,28 @@ export class QuoteChangedError extends Error {
   }
 }
 
+/**
+ * Why an invite link can't be used. The code lets the invite page say the
+ * right thing ("ask them for a new link" vs "already paid") instead of one
+ * generic message; the recipient's name is included where it is safe to.
+ */
+export type InviteUnavailableCode =
+  | 'INVITE_INVALID'     // bad or tampered token, or no such invite
+  | 'INVITE_EXPIRED'     // past its expiry date
+  | 'INVITE_REVOKED'     // recipient withdrew it
+  | 'INVITE_FULLY_PAID'  // the bill it was for has been cleared
+
+export class InviteUnavailableError extends Error {
+  constructor(
+    readonly code: InviteUnavailableCode,
+    message: string,
+    readonly recipientFirstName?: string,
+  ) {
+    super(message)
+    this.name = 'InviteUnavailableError'
+  }
+}
+
 // ─── API response types ───────────────────────────────────────────────────────
 
 export interface ApiResponse<T> {

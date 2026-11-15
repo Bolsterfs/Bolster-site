@@ -270,9 +270,16 @@ export interface Invite {
 
 export interface ResolvedInviteDebt {
   id:                    string
+  /** Absent when the recipient chose to keep the creditor private. */
   creditorName?:         string
-  remainingAmountPence?: number
+  /** Always present: the creditor's name, or a neutral "Energy bill" when private. */
+  label:                 string
+  /** Always present so the helper can pick an amount and can't overpay. */
+  remainingAmountPence:  number
 }
+
+export type InviteUnavailableCode =
+  | 'INVITE_INVALID' | 'INVITE_EXPIRED' | 'INVITE_REVOKED' | 'INVITE_FULLY_PAID'
 
 export interface ResolvedInvite {
   inviteId:              string

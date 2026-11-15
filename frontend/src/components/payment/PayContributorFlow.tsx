@@ -29,6 +29,34 @@ function feeRuleLabel(quote: PaymentQuote): string {
   return `${percentage}% of the amount you give`
 }
 
+/** "Step 1 of 4 · Amount" — so a helper knows how long this takes. */
+const STEPS: { key: Step; label: string }[] = [
+  { key: 'amount',  label: 'Amount' },
+  { key: 'details', label: 'Your details' },
+  { key: 'confirm', label: 'Review' },
+]
+function StepIndicator({ step, paysByCard }: { step: Step; paysByCard: boolean }) {
+  const idx = STEPS.findIndex((s) => s.key === step)
+  if (idx < 0) return null
+  const total = STEPS.length + 1 // final step happens on the checkout / bank page
+  return (
+    <div className="mb-4" aria-label={`Step ${idx + 1} of ${total}`}>
+      <div className="flex justify-between text-[11px] text-mid-gray mb-1.5">
+        <span>Step {idx + 1} of {total} · <span className="text-white">{STEPS[idx]?.label}</span></span>
+        <span>Then: {paysByCard ? 'pay by card' : 'approve with your bank'}</span>
+      </div>
+      <div className="flex gap-1">
+        {Array.from({ length: total }).map((_, i) => (
+          <span
+            key={i}
+            className={`h-1 flex-1 rounded-full ${i <= idx ? 'bg-teal-500' : 'bg-blue-900/60'}`}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 /** The fee breakdown, shown on the amount step and again before paying. */
 function FeeBreakdown({ quote, creditorLabel }: { quote: PaymentQuote; creditorLabel: string }) {
   return (
@@ -72,25 +100,25 @@ export default function PayContributorFlow({ inviteToken, invite, selectedDebt }
     ? invite.inviteMaxAmountPence / 100
     : null
 
-  const remainingPence = selectedDebt.remainingAmountPence ?? null
-  const remainingPounds = remainingPence != null ? remainingPence / 100 : null
-  const isFullyPaid = remainingPence != null && remainingPence <= 0
+  const remainingPence = selectedDebt.remainingAmountPence
+  const remainingPounds = remainingPence / 100
+  const isFullyPaid = remainingPence <= 0
 
   // Effective max: the lesser of invite max and remaining balance
-  const effectiveMaxPounds = (() => {
-    if (maxAmountPounds && remainingPounds) return Math.min(maxAmountPounds, remainingPounds)
-    return maxAmountPounds ?? remainingPounds
-  })()
+  const effectiveMaxPounds = maxAmountPounds ? Math.min(maxAmountPounds, remainingPounds) : remainingPounds
+  const effectiveMaxPence  = Math.round(effectiveMaxPounds * 100)
 
-  const creditorLabel = selectedDebt.creditorName ?? 'The creditor'
-  const creditorInline = selectedDebt.creditorName ?? 'the creditor'
+  // When the recipient keeps the creditor private we still have a neutral
+  // label ("Energy bill"); in sentences we say "the company" instead.
+  const creditorLabel  = selectedDebt.creditorName ?? selectedDebt.label
+  const creditorInline = selectedDebt.creditorName ?? 'the company'
 
   // Reasons the entered amount can't be paid, checked before asking for a quote.
   const amountProblem = (() => {
     if (!amountPounds) return null
     if (amountPence < MIN_QUOTE_PENCE) return 'Please enter an amount of at least £1.00'
-    if (remainingPence != null && amountPence > remainingPence) {
-      return `Amount cannot exceed the outstanding balance of ${formatPence(remainingPence)}`
+    if (amountPence > remainingPence) {
+      return `Only ${formatPence(remainingPence)} is left to pay on this bill`
     }
     if (invite.inviteMaxAmountPence && amountPence > invite.inviteMaxAmountPence) {
       return `Maximum contribution is ${formatPence(invite.inviteMaxAmountPence)}`
@@ -203,7 +231,7 @@ export default function PayContributorFlow({ inviteToken, invite, selectedDebt }
     }, 1000)
   }
 
-  const paysByCard = activeQuote?.paymentMethod === 'card'
+  const paysByCard = (activeQuote?.paymentMethod ?? invite.paymentMethod ?? 'card') === 'card'
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -220,13 +248,12 @@ export default function PayContributorFlow({ inviteToken, invite, selectedDebt }
 
       {step === 'amount' && !isFullyPaid && (
         <div className="card">
-          <h2 className="text-lg font-semibold text-white mb-1">How much would you like to pay?</h2>
-          {remainingPounds != null && (
-            <p className="text-sm text-mid-gray mb-4">
-              Maximum: <span className="text-white font-medium">£{remainingPounds.toFixed(2)}</span>
-              <span className="text-mid-gray"> (full outstanding balance)</span>
-            </p>
-          )}
+          <StepIndicator step={step} paysByCard={paysByCard} />
+          <h2 className="text-lg font-semibold text-white mb-1">How much would you like to give?</h2>
+          <p className="text-sm text-mid-gray mb-4">
+            Anything from £1 up to the {formatPence(effectiveMaxPence)} still owed
+            {maxAmountPounds && effectiveMaxPence < remainingPence ? ` (${invite.recipientFirstName} set a limit per person)` : ''}.
+          </p>
 
           <div className="mb-4">
             <label className="label" htmlFor="contribution-amount">Amount (£)</label>
@@ -251,10 +278,10 @@ export default function PayContributorFlow({ inviteToken, invite, selectedDebt }
             {(error || amountProblem) && <p className="error-text">{error || amountProblem}</p>}
           </div>
 
-          {/* Quick amount buttons — only show amounts within remaining balance */}
-          <div className="grid grid-cols-3 gap-2 mb-5">
+          {/* Quick amounts within what's left, plus "the whole bill" */}
+          <div className="grid grid-cols-4 gap-2 mb-5">
             {[25, 50, 100]
-              .filter((amt) => !effectiveMaxPounds || amt <= effectiveMaxPounds)
+              .filter((amt) => amt < effectiveMaxPounds)
               .map((amt) => (
                 <button
                   key={amt}
@@ -265,6 +292,13 @@ export default function PayContributorFlow({ inviteToken, invite, selectedDebt }
                   £{amt}
                 </button>
               ))}
+            <button
+              type="button"
+              className="border border-teal-700 rounded-lg py-2 text-sm text-teal-300 hover:border-teal-400 hover:text-teal-200 transition-colors col-span-1"
+              onClick={() => { setAmountPounds(effectiveMaxPounds.toFixed(2)); setError('') }}
+            >
+              {effectiveMaxPence < remainingPence ? 'Max' : 'All of it'}
+            </button>
           </div>
 
           {/* Fee breakdown — visible as soon as there is an amount to price */}
@@ -328,9 +362,11 @@ export default function PayContributorFlow({ inviteToken, invite, selectedDebt }
           >
             ← Back
           </button>
-          <h2 className="text-lg font-semibold text-white mb-4">Your details</h2>
+          <StepIndicator step={step} paysByCard={paysByCard} />
+          <h2 className="text-lg font-semibold text-white mb-2">Your details</h2>
           <p className="text-sm text-mid-gray mb-5">
-            We need these for your payment confirmation. Your details are not shared with {invite.recipientFirstName}.
+            Just so we can send you a receipt. {invite.recipientFirstName} will see your name
+            next to the payment, but not your email address.
           </p>
 
           <div className="space-y-4 mb-5">
@@ -385,13 +421,15 @@ export default function PayContributorFlow({ inviteToken, invite, selectedDebt }
           >
             ← Back
           </button>
-          <h2 className="text-lg font-semibold text-white mb-5">Review your payment</h2>
+          <StepIndicator step={step} paysByCard={paysByCard} />
+          <h2 className="text-lg font-semibold text-white mb-5">Check and pay</h2>
 
           {activeQuote ? (
             <>
               <p className="text-sm text-mid-gray mb-3">
-                Payment to{' '}
-                <span className="text-white font-medium">{selectedDebt.creditorName ?? 'Creditor'}</span>
+                Paying towards{' '}
+                <span className="text-white font-medium">{creditorLabel}</span>
+                {' '}for {invite.recipientFirstName}
               </p>
 
               <div className="mb-5">
