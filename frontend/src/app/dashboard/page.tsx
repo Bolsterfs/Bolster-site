@@ -52,8 +52,8 @@ export default function DashboardPage() {
   }
 
   // ── Stats bar ─────────────────────────────────────────────────────────────
-  const totalOwed     = debts.reduce((s, d) => s + d.totalAmountPence - d.paidAmountPence, 0)
-  const totalPaid     = debts.reduce((s, d) => s + d.paidAmountPence, 0)
+  const totalOwed     = debts.reduce((s, d) => s + Math.max(0, d.totalAmountPence - d.paidAmountPence), 0)
+  const totalPaid     = debts.reduce((s, d) => s + Math.min(d.paidAmountPence, d.totalAmountPence), 0)
   const activeInvites = invites.filter((i) => i.status === 'active').length
 
   return (
@@ -155,7 +155,8 @@ export default function DashboardPage() {
                     {/* Progress bar */}
                     <div className="mt-3">
                       <div className="flex justify-between text-xs text-mid-gray mb-1">
-                        <span>Paid: {formatPence(debt.paidAmountPence)}</span>
+                        {/* Show paid capped at the total: a few legacy test rows were over-credited before the overpay cap existed */}
+                        <span>Paid: {formatPence(Math.min(debt.paidAmountPence, debt.totalAmountPence))}</span>
                         <span>Total: {formatPence(debt.totalAmountPence)}</span>
                       </div>
                       <div className="h-1.5 bg-blue-900/60 rounded-full overflow-hidden">
