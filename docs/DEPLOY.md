@@ -37,15 +37,28 @@ it off — do not do that until the go-live checklist in the handover is done.
 3. In the project, **+ New → Database → PostgreSQL.** Rename it **postgres** if you like.
 4. **+ New → GitHub Repo → Bolsterfs/Bolster-site** again. Rename this one **frontend**.
 
-## 2. Point each service at its config file
+## 2. Build and start settings (per service)
 
-Both services deploy from the repo root, and each reads its own config:
+Railway's "config file" option is deprecated (stops working 1 Dec 2026), so set these
+by hand in each service's **Settings** page. The `railway.*.json` files in the repo are
+kept only as a readable record.
 
-- **backend** → Settings → Config-as-code → Config file path: `railway.backend.json`
-- **frontend** → Settings → Config-as-code → Config file path: `railway.frontend.json`
+Each service has **Root Directory** set to its own folder, so commands run *inside*
+that folder (no `cd`, no `--workspace`). Railway still installs from the repo's root
+lockfile because the folders are npm workspaces.
 
-These set the build command, start command, health check, and which folders
-trigger a redeploy. (If Railway asks, Root Directory stays `/` for both.)
+**backend** → Settings
+- Source → Root Directory: `/backend`
+- Build → Build Command: `npm run build`
+- Deploy → Custom Start Command: `node dist/db/migrate.js && node dist/server.js`
+- Deploy → Healthcheck Path: `/health`
+- Watch Paths: leave empty (root directory already limits it)
+
+**frontend** → Settings
+- Source → Root Directory: `/frontend`
+- Build → Build Command: `npm run build`
+- Deploy → Custom Start Command: `npm run start`
+- Watch Paths: leave empty
 
 ## 3. Variables — backend
 

@@ -2,12 +2,12 @@
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "npm run build --workspace=frontend",
-    "watchPatterns": ["frontend/**", "package.json", "package-lock.json"]
+    "buildCommand": "npm run build"
   },
   "deploy": {
-    "startCommand": "npm run start --workspace=frontend",
+    "startCommand": "npm run start",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 5
-  }
+  },
+  "_note": "Record only \u2014 Railway config files are deprecated. Set these in the service Settings with Root Directory = /backend or /frontend."
 }

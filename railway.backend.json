@@ -2,14 +2,14 @@
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "npm run build --workspace=backend",
-    "watchPatterns": ["backend/**", "package.json", "package-lock.json"]
+    "buildCommand": "npm run build"
   },
   "deploy": {
-    "startCommand": "cd backend && node dist/db/migrate.js && node dist/server.js",
+    "startCommand": "node dist/db/migrate.js && node dist/server.js",
     "healthcheckPath": "/health",
     "healthcheckTimeout": 120,
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 5
-  }
+  },
+  "_note": "Record only \u2014 Railway config files are deprecated. Set these in the service Settings with Root Directory = /backend or /frontend."
 }
