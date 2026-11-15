@@ -2,7 +2,7 @@ import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import jwt from '@fastify/jwt'
 import rateLimit from '@fastify/rate-limit'
-import { env } from './config/env.js'
+import { env, isTestStage } from './config/env.js'
 import { checkDatabaseConnection } from './db/client.js'
 import { authRoutes } from './api/routes/auth.routes.js'
 import { debtRoutes } from './api/routes/debt.routes.js'
@@ -63,7 +63,9 @@ await server.register(paymentRoutes, { prefix: '/api/v1/payments' })
 await server.register(adminRoutes,   { prefix: '/api/v1/admin' })   // staff only — see ADMIN_EMAILS
 await server.register(webhookRoutes, { prefix: '/webhooks' })  // no auth — signature verified per-handler
 
-if (env.NODE_ENV === 'development') {
+// Test environments (laptop or the hosted test deployment) get the dev
+// shortcuts. A live deployment never registers these routes.
+if (isTestStage) {
   await server.register(devRoutes, { prefix: '/api/v1/dev' })
 }
 
@@ -97,9 +99,9 @@ async function start() {
     process.exit(1)
   }
 
-  // Development only: make sure the made-up test creditors exist so the
-  // "Add a debt" screen has something to choose from. Never runs in production.
-  if (env.NODE_ENV === 'development') {
+  // Test environments only: make sure the made-up test creditors exist so the
+  // "Add a debt" screen has something to choose from. Never runs when live.
+  if (isTestStage) {
     try {
       const created = await ensureTestCreditors()
       if (created > 0) server.log.info(`Added ${created} test creditor(s) for development`)
@@ -112,9 +114,9 @@ async function start() {
   }
 
   try {
-    const port = 3001
+    const port = env.PORT
     await server.listen({ port, host: '0.0.0.0' })
-    server.log.info(`Bolster backend running on port ${port} [${env.NODE_ENV}]`)
+    server.log.info(`Bolster backend running on port ${port} [${env.NODE_ENV}, ${isTestStage ? 'TEST stage' : 'LIVE stage'}]`)
     startStripeReconciliation()
   } catch (err) {
     server.log.error(err)

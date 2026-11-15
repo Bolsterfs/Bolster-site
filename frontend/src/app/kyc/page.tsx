@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { kycApi, setAccessToken, setRefreshToken } from '../../lib/api'
+import { isTestStage } from '../../lib/stage'
 
 type PageState =
   | 'loading'        // checking current status
@@ -47,7 +48,7 @@ export default function KycPage() {
     // In development, stop and ask. Veriff's sandbox sends people back to an
     // https://localhost address that the local app cannot serve, so going
     // straight to Veriff strands a new user on a browser error page.
-    if (process.env.NODE_ENV === 'development') {
+    if (isTestStage) {
       setState('choose')
       return
     }
@@ -141,17 +142,17 @@ export default function KycPage() {
               </p>
 
               <div className="rounded-lg border border-yellow-700/50 bg-yellow-950/30 p-4 mb-4">
-                <p className="text-sm font-semibold text-yellow-300 mb-1">You&apos;re running locally</p>
+                <p className="text-sm font-semibold text-yellow-300 mb-1">This is the test version</p>
                 <p className="text-xs text-yellow-200/80 leading-relaxed mb-3">
-                  The real Veriff check can&apos;t complete here — it sends you back to an https
-                  address this local app doesn&apos;t serve. Use the development approval instead.
+                  No real identity documents are needed here. Use the test approval below to carry
+                  on, or try the real Veriff sandbox check if you want to see that flow.
                 </p>
                 <button
                   type="button"
                   onClick={() => void handleDevApprove()}
                   className="btn-primary w-full text-sm py-2.5"
                 >
-                  Approve my identity (development)
+                  Approve my identity (test)
                 </button>
               </div>
 
@@ -163,7 +164,7 @@ export default function KycPage() {
                 Try the real Veriff check anyway
               </button>
               <p className="text-[11px] text-mid-gray mt-2 text-center">
-                Only works once the app is deployed on https.
+                Veriff sends you back to an https address, so this only completes on the hosted test version, not on a laptop.
               </p>
             </div>
           )}
@@ -237,7 +238,7 @@ export default function KycPage() {
         </div>
       </main>
 
-      {process.env.NODE_ENV === 'development' && (
+      {isTestStage && (
         <div className="border-t border-yellow-800/50 bg-yellow-950/30 px-4 py-3">
           <div className="max-w-lg mx-auto flex items-center justify-between gap-4">
             <p className="text-xs text-yellow-500/80">

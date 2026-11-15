@@ -6,7 +6,7 @@ import { users, refreshTokens } from '../../db/schema/index.js'
 import { kycService } from '../../services/kyc/kyc.service.js'
 import { authenticate } from '../hooks/auth.hook.js'
 import { writeAuditEvent } from '../../utils/audit.js'
-import { env } from '../../config/env.js'
+import { env, isTestStage } from '../../config/env.js'
 import type { JwtPayload } from '../../types/index.js'
 
 export async function kycRoutes(app: FastifyInstance) {
@@ -53,8 +53,8 @@ export async function kycRoutes(app: FastifyInstance) {
 
   // ── POST /api/v1/kyc/dev-approve — DEV ONLY ──────────────────────────────
   // Immediately marks the user as KYC approved without Veriff.
-  // Only registered when NODE_ENV=development — never reachable in production.
-  if (env.NODE_ENV === 'development') {
+  // Only registered in a test environment (APP_STAGE) — never reachable when live.
+  if (isTestStage) {
     app.post('/dev-approve', { preHandler: [authenticate] }, async (request, reply) => {
       const user = request.user as JwtPayload
 

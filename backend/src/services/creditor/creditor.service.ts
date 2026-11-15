@@ -2,7 +2,7 @@ import { and, eq, isNull } from 'drizzle-orm'
 import { db } from '../../db/client.js'
 import { creditors } from '../../db/schema/index.js'
 import type { Creditor } from '../../db/schema/index.js'
-import { env } from '../../config/env.js'
+import { isTestStage } from '../../config/env.js'
 
 /**
  * What a recipient is allowed to see about a creditor. Deliberately excludes
@@ -42,8 +42,8 @@ export function normaliseCreditorName(value: string): string {
 /** True when a creditor may be offered to recipients in this environment. */
 function isUsable(c: Creditor): boolean {
   if (!c.isActive || c.deletedAt) return false
-  // Test rows exist only so the app can be exercised in development.
-  if (c.isTestData && env.NODE_ENV === 'production') return false
+  // Test rows exist only so the app can be exercised in a test environment.
+  if (c.isTestData && !isTestStage) return false
   return true
 }
 

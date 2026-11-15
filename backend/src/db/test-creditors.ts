@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm'
 import { db } from './client.js'
 import { creditors } from './schema/index.js'
-import { env } from '../config/env.js'
+import { isTestStage } from '../config/env.js'
 
 /**
  * TEST creditors for local development ONLY.
@@ -25,7 +25,7 @@ const TEST_CREDITORS = [
 
 /** Create any missing test creditors. Safe to run repeatedly. Development only. */
 export async function ensureTestCreditors(): Promise<number> {
-  if (env.NODE_ENV !== 'development') return 0
+  if (!isTestStage) return 0
 
   let created = 0
   for (const c of TEST_CREDITORS) {

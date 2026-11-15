@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { creditorApi, debtApi, formatPence } from '../../../../lib/api'
+import { isTestStage } from '../../../../lib/stage'
 import type { BillScanResult, Creditor } from '../../../../lib/api'
 import { prepareBillUpload, BillUploadError } from '../../../../lib/billUpload'
 import { useRequireAuth } from '../../../../lib/useRequireAuth'
@@ -366,7 +367,7 @@ export default function NewDebtPage() {
                 </div>
               )}
 
-              {!scanEnabled && listState === 'ready' && process.env.NODE_ENV === 'development' && (
+              {!scanEnabled && listState === 'ready' && isTestStage && (
                 <p className="text-xs text-mid-gray mb-6 rounded-lg border border-blue-900/40 px-3 py-2">
                   Dev note: bill scanning is off because no ANTHROPIC_API_KEY is set in backend/.env.
                 </p>

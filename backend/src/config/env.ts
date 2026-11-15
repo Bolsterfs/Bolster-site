@@ -4,6 +4,21 @@ import 'dotenv/config'
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
 
+  // Which kind of deployment this is — independent of NODE_ENV.
+  //   test: Stripe test mode, made-up test creditors, dev tools and the
+  //         identity-check bypass available, "no real money" banner shown.
+  //   live: none of that. Real creditors only, real identity checks.
+  // Defaults to 'test' unless NODE_ENV is production, so a laptop is always a
+  // test environment and a careless production deploy is still safe.
+  APP_STAGE: z.enum(['test', 'live']).optional(),
+
+  // Port to listen on. Hosts like Railway inject PORT.
+  PORT: z.coerce.number().int().positive().default(3001),
+
+  // Force SSL on/off for Postgres. Unset = on in production unless the host is
+  // a private network address (e.g. Railway's *.railway.internal), which has no TLS.
+  DATABASE_SSL: z.enum(['true', 'false']).optional(),
+
   // Database
   DATABASE_URL: z.string().url(),
 
@@ -88,4 +103,20 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data
+
+/** True when this deployment is a test environment (see APP_STAGE). */
+export const isTestStage: boolean = (env.APP_STAGE ?? (env.NODE_ENV === 'production' ? 'live' : 'test')) === 'test'
+
+/** Whether Postgres connections should use TLS. */
+export const databaseSsl: boolean = (() => {
+  if (env.DATABASE_SSL === 'true')  return true
+  if (env.DATABASE_SSL === 'false') return false
+  if (env.NODE_ENV !== 'production') return false
+  try {
+    const host = new URL(env.DATABASE_URL).hostname
+    return !host.endsWith('.railway.internal') && host !== 'localhost'
+  } catch {
+    return true
+  }
+})()
 export type Env = typeof env

@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import DevTools from '../components/DevTools'
+import TestStageBanner from '../components/TestStageBanner'
+import { isTestStage } from '../lib/stage'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -33,7 +35,8 @@ export default function RootLayout({
     <html lang="en">
       <body className="bg-navy text-white antialiased">
         {children}
-        {process.env.NODE_ENV === 'development' && <DevTools />}
+        <TestStageBanner />
+        {isTestStage && <DevTools />}
       </body>
     </html>
   )
