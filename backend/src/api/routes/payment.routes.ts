@@ -145,8 +145,13 @@ export async function paymentRoutes(app: FastifyInstance) {
       // the contributor's own unguessable payment ID.
       const debt = await db.query.debts.findFirst({
         where:   eq(debts.id, payment.debtId),
-        columns: { creditorName: true },
+        columns: { creditorName: true, creditorId: true },
       })
+      // Honour the invite's privacy level — a helper on an 'amount_only'
+      // invite must not learn the creditor from the receipt.
+      const shownCreditorName = debt
+        ? await paymentService.contributorCreditorName(payment, debt)
+        : 'the creditor'
 
       // Return minimal public status — no PII
       return reply.send({
@@ -154,7 +159,7 @@ export async function paymentRoutes(app: FastifyInstance) {
         data: {
           status:           payment.status,
           reference:        payment.id.slice(0, 8).toUpperCase(),
-          creditorName:     debt?.creditorName ?? 'the creditor',
+          creditorName:     shownCreditorName,
           netAmountPence:   payment.netAmountPence,
           feeAmountPence:   payment.feeAmountPence,
           grossAmountPence: payment.grossAmountPence,

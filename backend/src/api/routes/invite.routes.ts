@@ -1,24 +1,11 @@
 import type { FastifyInstance } from 'fastify'
 import { InviteUnavailableError } from '../../types/index.js'
+import { neutralBillLabel } from '../../services/creditor/creditor.service.js'
 
-const CATEGORY_LABEL: Record<string, string> = {
-  energy:   'Energy bill',
-  water:    'Water bill',
-  council:  'Council bill',
-  telecoms: 'Phone or broadband bill',
-  lender:   'Loan or credit card',
-  bnpl:     'Buy-now-pay-later balance',
-}
-
-/** "Energy bill", or "Bill 2 of 3" when the category isn't known. */
-function neutralBillLabel(category: string | null | undefined, index: number, total: number): string {
-  const base = (category && CATEGORY_LABEL[category]) ?? 'Bill'
-  return total > 1 ? `${base} ${index + 1} of ${total}` : base
-}
 import { env } from '../../config/env.js'
-import { eq, inArray } from 'drizzle-orm'
+import { desc, eq, inArray } from 'drizzle-orm'
 import { db } from '../../db/client.js'
-import { invites, creditors } from '../../db/schema/index.js'
+import { invites, creditors, debts } from '../../db/schema/index.js'
 import { createInviteSchema } from '../../types/index.js'
 import { authenticate, requireKyc } from '../hooks/auth.hook.js'
 import { inviteService } from '../../services/invite/invite.service.js'
@@ -102,13 +89,39 @@ export async function inviteRoutes(app: FastifyInstance) {
   app.get('/', { preHandler: [authenticate, requireKyc] }, async (request, reply) => {
     const user = request.user as JwtPayload
 
-    const userInvites = await db.query.invites.findMany({
-      where: eq(invites.userId, user.sub),
-      orderBy: (i, { desc }) => [desc(i.createdAt)],
-      with: { debt: true },
-    })
+    // Every invite the recipient has made, newest first, with the bill it was
+    // for (null = a general invite where the helper chooses). The token is
+    // included even for inactive invites so the recipient can see what a
+    // helper sees if they open an old link.
+    const rows = await db
+      .select({
+        id:              invites.id,
+        token:           invites.token,
+        debtId:          invites.debtId,
+        creditorName:    debts.creditorName,
+        privacyLevel:    invites.privacyLevel,
+        personalMessage: invites.personalMessage,
+        maxAmountPence:  invites.maxAmountPence,
+        status:          invites.status,
+        expiresAt:       invites.expiresAt,
+        openCount:       invites.openCount,
+        createdAt:       invites.createdAt,
+        revokedAt:       invites.revokedAt,
+      })
+      .from(invites)
+      .leftJoin(debts, eq(debts.id, invites.debtId))
+      .where(eq(invites.userId, user.sub))
+      .orderBy(desc(invites.createdAt))
 
-    return reply.send({ success: true, data: userInvites })
+    // An invite past its date but never opened since is still marked 'active'
+    // in the table; report it as expired so the list is truthful.
+    const now = Date.now()
+    const data = rows.map((r) => ({
+      ...r,
+      status: r.status === 'active' && r.expiresAt.getTime() < now ? 'expired' : r.status,
+    }))
+
+    return reply.send({ success: true, data })
   })
 
   // ── POST /api/v1/invites ──────────────────────────────────────────────────

@@ -187,54 +187,32 @@ export default function DashboardPage() {
             {invites.length === 0 ? (
               <EmptyState
                 icon="💌"
-                title="No invites created yet"
-                description="Go to your Debts tab to create an invite for a specific bill."
+                title="No invites yet"
+                description="An invite is a private link you share with someone who wants to help. They choose a bill and pay the company directly."
+                action={debts.length > 0 ? { label: 'Create invite link', href: '/dashboard/invites/new' } : undefined}
               />
             ) : (
-              invites.map((invite) => (
-                <div key={invite.id} className="card">
-                  <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <p className="text-white font-medium text-sm">
-                        Invite · {invite.privacyLevel.replace(/_/g, ' ')}
-                      </p>
-                      <p className="text-xs text-mid-gray mt-0.5">
-                        Opened {invite.openCount} time{invite.openCount !== 1 ? 's' : ''} ·
-                        Expires {new Date(invite.expiresAt).toLocaleDateString('en-GB')}
-                      </p>
-                    </div>
-                    <StatusBadge status={invite.status} />
-                  </div>
-
-                  {invite.status === 'active' && (
-                    <div className="flex gap-2 mt-3">
-                      <button
-                        type="button"
-                        className="flex-1 btn-primary text-sm py-2"
-                        onClick={() => {
-                          const url = `${window.location.origin}/invite/${invite.token}`
-                          void navigator.clipboard.writeText(url)
-                          alert('Invite link copied!')
-                        }}
-                      >
-                        Copy link
-                      </button>
-                      <button
-                        type="button"
-                        className="btn-secondary text-sm py-2 px-4"
-                        onClick={async () => {
-                          if (confirm('Revoke this invite? The link will stop working.')) {
-                            await inviteApi.revoke(invite.id, 'Revoked by recipient')
-                            setInvites((prev) => prev.filter((i) => i.id !== invite.id))
-                          }
-                        }}
-                      >
-                        Revoke
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))
+              <>
+                <Link
+                  href="/dashboard/invites/new"
+                  className="text-sm py-3 block text-center w-full rounded-lg font-semibold transition-colors mb-2"
+                  style={{ backgroundColor: '#f97316', color: 'white' }}
+                >
+                  Create invite link →
+                </Link>
+                <p className="text-xs text-mid-gray px-1">{describeInvites(invites)}</p>
+                {invites.map((invite) => (
+                  <InviteCard
+                    key={invite.id}
+                    invite={invite}
+                    onRevoked={() =>
+                      setInvites((prev) =>
+                        prev.map((i) => (i.id === invite.id ? { ...i, status: 'revoked' } : i)),
+                      )
+                    }
+                  />
+                ))}
+              </>
             )}
           </div>
         )}
@@ -266,6 +244,93 @@ export default function DashboardPage() {
 }
 
 // ── Helper components ─────────────────────────────────────────────────────────
+
+function describeInvites(invites: Invite[]): string {
+  const active = invites.filter((i) => i.status === 'active').length
+  const opened = invites.reduce((s, i) => s + i.openCount, 0)
+  const parts = [`${invites.length} invite${invites.length === 1 ? '' : 's'}`]
+  parts.push(active === 0 ? 'none active' : `${active} active`)
+  if (opened > 0) parts.push(`opened ${opened} time${opened === 1 ? '' : 's'} in total`)
+  return parts.join(' · ')
+}
+
+const INVITE_STATUS_COPY: Record<string, string> = {
+  active:     'Active',
+  fully_paid: 'Bill fully paid',
+  expired:    'Expired',
+  revoked:    'Revoked',
+}
+
+const PRIVACY_COPY: Record<string, string> = {
+  amount_only:   'Company name hidden',
+  creditor_name: 'Company name shown',
+  full_balance:  'Company and full balance shown',
+}
+
+function InviteCard({ invite, onRevoked }: { invite: Invite; onRevoked: () => void }) {
+  const [copied, setCopied] = useState(false)
+  const isActive = invite.status === 'active'
+  const created  = new Date(invite.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  const expires  = new Date(invite.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+
+  function copy() {
+    void navigator.clipboard.writeText(`${window.location.origin}/invite/${invite.token}`).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+
+  return (
+    <div className={`card ${isActive ? '' : 'opacity-75'}`}>
+      <div className="flex justify-between items-start gap-3">
+        <div className="min-w-0">
+          <p className="text-white font-medium">
+            {invite.creditorName ? `For ${invite.creditorName}` : 'Any of my bills'}
+          </p>
+          <p className="text-xs text-mid-gray mt-0.5">
+            {PRIVACY_COPY[invite.privacyLevel] ?? invite.privacyLevel.replace(/_/g, ' ')}
+            {invite.maxAmountPence ? ` · up to ${formatPence(invite.maxAmountPence)} per person` : ''}
+          </p>
+          <p className="text-xs text-mid-gray mt-0.5">
+            Created {created} · {isActive ? `expires ${expires}` : `was due to expire ${expires}`} ·
+            opened {invite.openCount} time{invite.openCount === 1 ? '' : 's'}
+          </p>
+        </div>
+        <StatusBadge status={invite.status} label={INVITE_STATUS_COPY[invite.status]} />
+      </div>
+
+      {invite.personalMessage && (
+        <p className="text-sm text-gray-300 mt-3 border-l-2 border-blue-900/60 pl-3 italic">
+          &ldquo;{invite.personalMessage}&rdquo;
+        </p>
+      )}
+
+      <div className="flex gap-2 mt-3">
+        <button
+          type="button"
+          className={`${isActive ? 'btn-primary flex-1' : 'btn-secondary flex-1'} text-sm py-2`}
+          onClick={copy}
+        >
+          {copied ? 'Link copied' : isActive ? 'Copy link' : 'Copy link (to see what helpers see)'}
+        </button>
+        {isActive && (
+          <button
+            type="button"
+            className="btn-secondary text-sm py-2 px-4"
+            onClick={async () => {
+              if (confirm('Revoke this invite? The link will stop working for anyone who has it.')) {
+                const r = await inviteApi.revoke(invite.id, 'Revoked by recipient')
+                if (r.ok) onRevoked()
+              }
+            }}
+          >
+            Revoke
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
 
 /** "3 payments · £150.00 reached your creditors" — one line of context above the list. */
 function describeHistory(payments: PaymentHistoryItem[]): string {
@@ -327,7 +392,7 @@ function PaymentHistoryCard({ payment }: { payment: PaymentHistoryItem }) {
   )
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status, label }: { status: string; label?: string | undefined }) {
   const map: Record<string, string> = {
     active:     'badge-active',
     settled:    'badge-settled',
@@ -341,7 +406,7 @@ function StatusBadge({ status }: { status: string }) {
   }
   return (
     <span className={map[status] ?? 'badge-active'}>
-      {status.replace(/_/g, ' ')}
+      {label ?? status.replace(/_/g, ' ')}
     </span>
   )
 }
@@ -355,7 +420,7 @@ function EmptyState({
   icon:        string
   title:       string
   description: string
-  action?:     { label: string; href: string }
+  action?:     { label: string; href: string } | undefined
 }) {
   return (
     <div className="text-center py-12">

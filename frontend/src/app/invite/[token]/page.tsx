@@ -95,7 +95,7 @@ export default function InvitePage() {
               {name} has asked for your help with a bill
             </h1>
             <p className="text-mid-gray text-sm leading-relaxed">
-              You can pay some or all of it. The money goes straight to the company
+              You can pay some or all of it. The money goes straight to the company{' '}
               {name} owes — it never passes through {name}&apos;s account.
             </p>
           </div>
@@ -172,7 +172,7 @@ export default function InvitePage() {
                     <p className="text-white font-semibold">{selectedDebt.label}</p>
                     {!selectedDebt.creditorName && (
                       <p className="text-xs text-mid-gray mt-1">
-                        {name} has chosen to keep the company&apos;s name private.
+                        {name}{' '}has chosen to keep the company&apos;s name private.
                       </p>
                     )}
                   </div>

@@ -257,15 +257,19 @@ export const adminApi = {
 // ── Invites ───────────────────────────────────────────────────────────────────
 
 export interface Invite {
-  id:             string
-  token:          string
-  debtId:         string
-  privacyLevel:   string
-  personalMessage?: string
-  status:         string
-  expiresAt:      string
-  openCount:      number
-  createdAt:      string
+  id:               string
+  token:            string
+  /** null for a general invite — the helper picks which bill */
+  debtId:           string | null
+  creditorName:     string | null
+  privacyLevel:     string
+  personalMessage?: string | null
+  maxAmountPence?:  number | null
+  status:           string   // active | fully_paid | expired | revoked
+  expiresAt:        string
+  openCount:        number
+  createdAt:        string
+  revokedAt?:       string | null
 }
 
 export interface ResolvedInviteDebt {
@@ -439,6 +443,9 @@ export const devApi = {
   verifyDebts: () => apiFetch<{ verifiedCount: number }>('/dev/verify-debts', {
     method: 'POST',
   }),
+  /** DEV ONLY — backdates the newest active invite so the expired screen can be tested. */
+  expireNewestInvite: () =>
+    apiFetch<{ inviteId: string; token: string }>('/dev/expire-newest-invite', { method: 'POST' }),
   /** DEV ONLY — asks Stripe about every pending card payment right now. */
   reconcileStripe: () =>
     apiFetch<{ checked: number; settled: number; expired: number; unknown: number }>(

@@ -176,7 +176,7 @@ function PaymentCompleteContent() {
           <>
             <h1 className="text-2xl font-bold text-white mb-3">Payment confirmed</h1>
             <p className="text-mid-gray mb-6">
-              {formatPence(status.netAmountPence)} {paidByBank ? 'went directly to' : 'has been paid to'}{' '}
+              {formatPence(status.netAmountPence)} {paidByBank ? 'went directly towards' : 'has been paid towards'}{' '}
               <strong className="text-white">{status.creditorName}</strong>.
               You&apos;ll receive a confirmation email shortly.
             </p>
@@ -185,7 +185,7 @@ function PaymentCompleteContent() {
             <div className="card text-left" id="receipt">
               <p className="text-xs uppercase tracking-wide text-mid-gray mb-2">Receipt</p>
               <div className="flex justify-between py-2">
-                <span className="text-mid-gray text-sm">To {status.creditorName}</span>
+                <span className="text-mid-gray text-sm">Towards {status.creditorName}</span>
                 <span className="text-white font-medium">{formatPence(status.netAmountPence)}</span>
               </div>
               <div className="flex justify-between py-2">

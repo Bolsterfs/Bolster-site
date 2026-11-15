@@ -135,6 +135,23 @@ export default function DevTools() {
     setTimeout(() => window.location.reload(), 1200)
   }
 
+  async function handleExpireInvite() {
+    if (!getAccessToken()) {
+      setMsg('Login first')
+      return
+    }
+    setBusy('expire')
+    setMsg(null)
+    const result = await devApi.expireNewestInvite()
+    setBusy(null)
+    if (!result.ok) {
+      setMsg(result.error)
+      return
+    }
+    setInviteUrl(`${window.location.origin}/invite/${result.data.token}`)
+    setMsg('Newest invite is now expired — copy the URL below and open it in a private window')
+  }
+
   function handleCopyInvite() {
     if (!inviteUrl) return
     void navigator.clipboard.writeText(inviteUrl).then(() => {
@@ -227,6 +244,16 @@ export default function DevTools() {
               className="w-full bg-teal-600 hover:bg-teal-700 disabled:opacity-50 text-white text-xs font-medium py-2 px-3 rounded-lg transition-colors"
             >
               {busy === 'verify' ? 'Verifying...' : 'Verify my debts'}
+            </button>
+
+            {/* Expire newest invite so the "link expired" screen can be seen */}
+            <button
+              type="button"
+              onClick={() => void handleExpireInvite()}
+              disabled={busy === 'expire'}
+              className="w-full bg-amber-700 hover:bg-amber-800 disabled:opacity-50 text-white text-xs font-medium py-2 px-3 rounded-lg transition-colors"
+            >
+              {busy === 'expire' ? 'Expiring...' : 'Expire my newest invite'}
             </button>
 
             {/* Reconcile pending card payments with Stripe */}

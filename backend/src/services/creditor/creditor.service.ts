@@ -103,3 +103,48 @@ export class CreditorService {
 }
 
 export const creditorService = new CreditorService()
+
+
+// ─── What a CONTRIBUTOR may call the creditor ──────────────────────────────────
+//
+// When the recipient chose the 'amount_only' privacy level, the helper must
+// never learn who is owed — not on the invite page, not on the Stripe checkout,
+// not on the confirmation page, not in the receipt email. Everything shown to a
+// contributor goes through this so the rule lives in one place.
+
+const CATEGORY_LABEL: Record<string, string> = {
+  energy:   'Energy bill',
+  water:    'Water bill',
+  council:  'Council bill',
+  telecoms: 'Phone or broadband bill',
+  lender:   'Loan or credit card',
+  bnpl:     'Buy-now-pay-later balance',
+}
+
+/** "Energy bill", or "Bill 2 of 3" when the category isn't known. */
+export function neutralBillLabel(
+  category: string | null | undefined,
+  index = 0,
+  total = 1,
+): string {
+  const base = (category && CATEGORY_LABEL[category]) ?? 'Bill'
+  return total > 1 ? `${base} ${index + 1} of ${total}` : base
+}
+
+/**
+ * The creditor name a contributor is allowed to see for a debt under a given
+ * invite privacy level. Looks the category up from the vetted creditor when the
+ * name must be hidden.
+ */
+export async function contributorFacingCreditorName(
+  debt:         { creditorName: string; creditorId: string | null },
+  privacyLevel: string,
+): Promise<string> {
+  if (privacyLevel !== 'amount_only') return debt.creditorName
+  if (!debt.creditorId) return neutralBillLabel(null)
+  const row = await db.query.creditors.findFirst({
+    where:   eq(creditors.id, debt.creditorId),
+    columns: { category: true },
+  })
+  return neutralBillLabel(row?.category)
+}

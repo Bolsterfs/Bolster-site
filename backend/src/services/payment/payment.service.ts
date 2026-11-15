@@ -9,6 +9,7 @@ import { notificationService } from '../notification/notification.service.js'
 import { calculateFee, validatePaymentAmount } from '../../utils/fees.js'
 import { writeAuditEvent } from '../../utils/audit.js'
 import { inviteService } from '../invite/invite.service.js'
+import { contributorFacingCreditorName } from '../creditor/creditor.service.js'
 import type { InitiatePaymentInput, Result } from '../../types/index.js'
 import { ok, err, QuoteChangedError } from '../../types/index.js'
 import { env } from '../../config/env.js'
@@ -184,8 +185,11 @@ export class PaymentService {
     // When TrueLayer PIS is disabled → go straight to Stripe.
     // When TrueLayer PIS is enabled  → try TrueLayer first, fall back to
     //                                   Stripe if it fails.
+    // Name the contributor is allowed to see (hidden under 'amount_only')
+    const shownCreditorName = await contributorFacingCreditorName(debt, invite.privacyLevel)
+
     if (!env.ENABLE_PAYMENT_INITIATION) {
-      return this.initiateViaStripe(payment, debt.creditorName, input.inviteToken, fees)
+      return this.initiateViaStripe(payment, shownCreditorName, input.inviteToken, fees)
     }
 
     const tlResult = await truelayerService.initiatePayment({
@@ -206,7 +210,7 @@ export class PaymentService {
       // TrueLayer failed — try Stripe as fallback before giving up
       if (env.STRIPE_SECRET_KEY) {
         const stripeResult = await this.initiateViaStripe(
-          payment, debt.creditorName, input.inviteToken, fees,
+          payment, shownCreditorName, input.inviteToken, fees,
         )
         if (stripeResult.ok) return stripeResult
       }
@@ -426,11 +430,11 @@ export class PaymentService {
 
     // ── Notifications (best-effort — never throw into settlement) ──────────
     try {
-      // 1. Contributor receipt
+      // 1. Contributor receipt — never name a creditor the recipient kept private
       await notificationService.sendContributorReceipt({
         contributorEmail: payment.contributorEmail,
         contributorName:  payment.contributorName,
-        creditorName:     debt?.creditorName ?? 'your creditor',
+        creditorName:     await this.contributorCreditorName(payment, debt),
         netAmountPence:   payment.netAmountPence,
         feeAmountPence:   payment.feeAmountPence,
         grossAmountPence: payment.grossAmountPence,
@@ -519,9 +523,25 @@ export class PaymentService {
     await notificationService.sendContributorFailureNotice({
       contributorEmail: payment.contributorEmail,
       contributorName:  payment.contributorName,
-      creditorName:     debt?.creditorName ?? 'your creditor',
+      creditorName:     await this.contributorCreditorName(payment, debt),
       paymentRef:       payment.id.slice(0, 8).toUpperCase(),
     })
+  }
+
+  /**
+   * The creditor name a contributor may see for this payment, honouring the
+   * privacy level of the invite the payment was made through.
+   */
+  async contributorCreditorName(
+    payment: Payment,
+    debt:    { creditorName: string; creditorId: string | null } | null | undefined,
+  ): Promise<string> {
+    if (!debt) return 'your creditor'
+    const invite = await db.query.invites.findFirst({
+      where:   eq(invites.id, payment.inviteId),
+      columns: { privacyLevel: true },
+    })
+    return contributorFacingCreditorName(debt, invite?.privacyLevel ?? 'amount_only')
   }
 
   // ── Stripe reconciliation ─────────────────────────────────────────────────

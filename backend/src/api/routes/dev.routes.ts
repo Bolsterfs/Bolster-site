@@ -151,6 +151,25 @@ export async function devRoutes(app: FastifyInstance) {
   // Runs the Stripe reconciliation sweep immediately instead of waiting for
   // the timer. Useful after a test payment made while the Stripe listener was
   // not running — the payment settles from Stripe's own record.
+  // Backdates the signed-in user's newest ACTIVE invite so it is already past
+  // its expiry — the only way to see the "link expired" screen without waiting
+  // 30 days. Returns the token so the tester can open it straight away.
+  app.post('/expire-newest-invite', { preHandler: [authenticate] }, async (request, reply) => {
+    const user = request.user as JwtPayload
+    const newest = await db.query.invites.findFirst({
+      where:   and(eq(invites.userId, user.sub), eq(invites.status, 'active')),
+      orderBy: (i, { desc }) => [desc(i.createdAt)],
+    })
+    if (!newest) {
+      return reply.status(404).send({ success: false, error: 'No active invite to expire — create one first' })
+    }
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000)
+    await db.update(invites)
+      .set({ expiresAt: yesterday, updatedAt: new Date() })
+      .where(eq(invites.id, newest.id))
+    return reply.send({ success: true, data: { inviteId: newest.id, token: newest.token } })
+  })
+
   app.post('/reconcile-stripe', { preHandler: [authenticate] }, async (_request, reply) => {
     const summary = await paymentService.reconcilePendingStripePayments()
     return reply.send({ success: true, data: summary })
