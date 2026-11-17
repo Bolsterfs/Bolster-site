@@ -59,6 +59,9 @@ lockfile because the folders are npm workspaces.
 - Build → Build Command: `npm run build`
 - Deploy → Custom Start Command: `npm run start`
 - Watch Paths: leave empty
+- Builder: **Railpack** (set in `railway.backend.json`). Switched from Nixpacks on 17 Nov 2026 after
+  repeated builds died silently ~60 s into `npm install` on Railway's Nixpacks builders. The backend also
+  has its own `package-lock.json` so the build runs `npm ci`.
 
 ## 3. Variables — backend
 
@@ -68,7 +71,7 @@ fill in the blanks.
 ```
 NODE_ENV=production
 APP_STAGE=test
-NIXPACKS_NODE_VERSION=22
+NIXPACKS_NODE_VERSION=22   # harmless if the builder is Railpack; Node 22 is pinned in backend/package.json engines
 
 # Railway fills this in when you reference the postgres service:
 DATABASE_URL=${{Postgres.DATABASE_URL}}
