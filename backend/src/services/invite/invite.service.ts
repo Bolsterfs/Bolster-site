@@ -36,6 +36,47 @@ export function generateInviteToken(inviteId: string): string {
   return `${Buffer.from(payload).toString('base64url')}-${signature}`
 }
 
+// ─── Short share codes ────────────────────────────────────────────────────────
+//
+// The signed token above is ~100 characters: fine for the machine, awkward in a
+// WhatsApp message. A short code is a random 9-character string from an
+// alphabet with no look-alikes (no 0/O, 1/l/I), looked up in the invites table.
+// 57^9 ≈ 6×10^15 combinations, so guessing one is not practical, and the
+// resolve endpoint is rate-limited besides. The long token keeps working.
+
+const SHORT_CODE_ALPHABET = '23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz'
+export const SHORT_CODE_LENGTH = 9
+const SHORT_CODE_PATTERN = new RegExp(`^[${SHORT_CODE_ALPHABET}]{${SHORT_CODE_LENGTH}}$`)
+
+export function generateShortCode(): string {
+  const bytes = crypto.randomBytes(SHORT_CODE_LENGTH)
+  let out = ''
+  for (let i = 0; i < SHORT_CODE_LENGTH; i++) {
+    out += SHORT_CODE_ALPHABET[bytes[i]! % SHORT_CODE_ALPHABET.length]
+  }
+  return out
+}
+
+/** True when a path segment looks like a short code rather than a signed token. */
+export function looksLikeShortCode(value: string): boolean {
+  return SHORT_CODE_PATTERN.test(value)
+}
+
+/**
+ * The public URL for an invite. Uses the short code when the invite has one.
+ *
+ * INVITE_BASE_URL historically had to end in "/invite"; people kept setting it
+ * to the bare site root, which produced links with no "/invite/" and a 404.
+ * Now any of these work: "https://app.example", "https://app.example/invite",
+ * "https://app.example/i" — the path is normalised to the site root here.
+ */
+export function buildInviteUrl(invite: { token: string; shortCode?: string | null }): string {
+  const root = env.INVITE_BASE_URL.replace(/\/+$/, '').replace(/\/(invite|i)$/, '')
+  return invite.shortCode
+    ? `${root}/i/${invite.shortCode}`
+    : `${root}/invite/${invite.token}`
+}
+
 /**
  * Verify an invite token signature and extract the invite ID.
  * Returns null if the signature is invalid (tampered token).
@@ -136,17 +177,18 @@ export class InviteService {
       return err(new Error('Failed to create invite'))
     }
 
-    // Generate signed token using the invite ID
+    // Generate signed token using the invite ID, plus a short share code
     const token = generateInviteToken(invite.id)
+    const shortCode = await this.uniqueShortCode()
 
-    // Update invite with the real token
+    // Update invite with the real token and code
     await db
       .update(invites)
-      .set({ token, updatedAt: new Date() })
+      .set({ token, shortCode, updatedAt: new Date() })
       .where(eq(invites.id, invite.id))
 
-    const updatedInvite = { ...invite, token }
-    const inviteUrl     = `${env.INVITE_BASE_URL}/${token}`
+    const updatedInvite = { ...invite, token, shortCode }
+    const inviteUrl     = buildInviteUrl(updatedInvite)
 
     await writeAuditEvent({
       eventType:  'invite_created',
@@ -167,22 +209,46 @@ export class InviteService {
    * Called when a contributor opens an invite link.
    * Records the open event for audit purposes.
    */
-  async resolveInviteToken(
-    token:      string,
-    ipAddress?: string,
-    userAgent?: string,
-  ): Promise<Result<InviteWithContext>> {
-    const inviteId = verifyInviteToken(token)
-    if (!inviteId) {
-      return err(new InviteUnavailableError('INVITE_INVALID', 'Invalid or tampered invite link'))
+  /** A short code no other invite has (collisions are astronomically unlikely, but cheap to check). */
+  private async uniqueShortCode(): Promise<string> {
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const code = generateShortCode()
+      const clash = await db.query.invites.findFirst({
+        where:   eq(invites.shortCode, code),
+        columns: { id: true },
+      })
+      if (!clash) return code
     }
+    throw new Error('Could not allocate a unique invite code')
+  }
 
-    const invite = await db.query.invites.findFirst({
-      where: and(
-        eq(invites.id, inviteId),
-        eq(invites.token, token),
-      ),
-    })
+  /**
+   * Accepts EITHER the long signed token OR the short share code — whatever was
+   * in the link the contributor opened — and returns the invite with context.
+   */
+  async resolveInviteToken(
+    tokenOrCode: string,
+    ipAddress?:  string,
+    userAgent?:  string,
+  ): Promise<Result<InviteWithContext>> {
+    let invite: Invite | undefined
+
+    if (looksLikeShortCode(tokenOrCode)) {
+      invite = await db.query.invites.findFirst({
+        where: eq(invites.shortCode, tokenOrCode),
+      })
+    } else {
+      const inviteId = verifyInviteToken(tokenOrCode)
+      if (!inviteId) {
+        return err(new InviteUnavailableError('INVITE_INVALID', 'Invalid or tampered invite link'))
+      }
+      invite = await db.query.invites.findFirst({
+        where: and(
+          eq(invites.id, inviteId),
+          eq(invites.token, tokenOrCode),
+        ),
+      })
+    }
 
     if (!invite) {
       return err(new InviteUnavailableError('INVITE_INVALID', 'Invite not found'))

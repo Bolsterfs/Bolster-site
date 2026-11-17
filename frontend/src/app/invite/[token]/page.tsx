@@ -21,8 +21,9 @@ interface Unavailable {
 }
 
 export default function InvitePage() {
-  const params = useParams<{ token: string }>()
-  const token = params.token
+  // Mounted at both /invite/[token] and /i/[code]; either value is accepted by the API.
+  const params = useParams<{ token?: string; code?: string }>()
+  const token = params.token ?? params.code ?? ''
 
   const [invite,       setInvite]       = useState<ResolvedInvite | null>(null)
   const [unavailable,  setUnavailable]  = useState<Unavailable | null>(null)

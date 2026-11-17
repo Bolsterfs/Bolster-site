@@ -97,6 +97,7 @@ export async function inviteRoutes(app: FastifyInstance) {
       .select({
         id:              invites.id,
         token:           invites.token,
+        shortCode:       invites.shortCode,
         debtId:          invites.debtId,
         creditorName:    debts.creditorName,
         privacyLevel:    invites.privacyLevel,

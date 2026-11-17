@@ -168,7 +168,11 @@ export const debts = pgTable('debts', {
 
 export const invites = pgTable('invites', {
   id:             uuid('id').primaryKey().defaultRandom(),
-  token:          text('token').notNull().unique(),     // HMAC-signed, URL-safe
+  token:          text('token').notNull().unique(),     // HMAC-signed, URL-safe (long link)
+  // Short share code, e.g. "k7mQ2xPzR" → https://app…/i/k7mQ2xPzR. Random, looked up
+  // in the table (not self-verifying like the token). Nullable only for rows created
+  // before this existed; the migration backfills every existing invite.
+  shortCode:      text('short_code').unique(),
   userId:         uuid('user_id').notNull().references(() => users.id),
   debtId:         uuid('debt_id').references(() => debts.id),  // nullable — user-level invites let contributor choose
   privacyLevel:   privacyLevelEnum('privacy_level').notNull().default('amount_only'),

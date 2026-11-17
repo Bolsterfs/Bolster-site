@@ -3,8 +3,7 @@ import { eq, and } from 'drizzle-orm'
 import { db } from '../../db/client.js'
 import { debts, invites, users } from '../../db/schema/index.js'
 import { authenticate } from '../hooks/auth.hook.js'
-import { generateInviteToken } from '../../services/invite/invite.service.js'
-import { env } from '../../config/env.js'
+import { generateInviteToken, generateShortCode, buildInviteUrl } from '../../services/invite/invite.service.js'
 import { paymentService } from '../../services/payment/payment.service.js'
 import type { JwtPayload } from '../../types/index.js'
 
@@ -93,17 +92,18 @@ export async function devRoutes(app: FastifyInstance) {
         return reply.status(500).send({ success: false, error: 'Failed to create test invite' })
       }
 
-      // Generate a signed token
+      // Generate a signed token and a short share code
       const token = generateInviteToken(created.id)
+      const shortCode = generateShortCode()
       await db
         .update(invites)
-        .set({ token, updatedAt: new Date() })
+        .set({ token, shortCode, updatedAt: new Date() })
         .where(eq(invites.id, created.id))
 
-      invite = { ...created, token }
+      invite = { ...created, token, shortCode }
     }
 
-    const inviteUrl = `${env.INVITE_BASE_URL}/${invite.token}`
+    const inviteUrl = buildInviteUrl(invite)
 
     return reply.send({
       success: true,
@@ -167,7 +167,7 @@ export async function devRoutes(app: FastifyInstance) {
     await db.update(invites)
       .set({ expiresAt: yesterday, updatedAt: new Date() })
       .where(eq(invites.id, newest.id))
-    return reply.send({ success: true, data: { inviteId: newest.id, token: newest.token } })
+    return reply.send({ success: true, data: { inviteId: newest.id, token: newest.token, inviteUrl: buildInviteUrl(newest) } })
   })
 
   app.post('/reconcile-stripe', { preHandler: [authenticate] }, async (_request, reply) => {

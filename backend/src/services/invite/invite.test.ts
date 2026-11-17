@@ -64,3 +64,38 @@ describe('invite token signing', () => {
     expect(token1).not.toBe(token2)
   })
 })
+
+describe('invite short codes', () => {
+  it('generates 9-character codes from the unambiguous alphabet', async () => {
+    const { generateShortCode, looksLikeShortCode, SHORT_CODE_LENGTH } = await import('./invite.service.js')
+    for (let i = 0; i < 50; i++) {
+      const code = generateShortCode()
+      expect(code).toHaveLength(SHORT_CODE_LENGTH)
+      expect(code).not.toMatch(/[0O1lI]/)
+      expect(looksLikeShortCode(code)).toBe(true)
+    }
+  })
+
+  it('does not mistake a signed token for a short code', async () => {
+    const { generateInviteToken, looksLikeShortCode } = await import('./invite.service.js')
+    expect(looksLikeShortCode(generateInviteToken('11111111-2222-3333-4444-555555555555'))).toBe(false)
+    expect(looksLikeShortCode('short')).toBe(false)
+    expect(looksLikeShortCode('k7mQ2xPzR0')).toBe(false) // wrong length
+  })
+
+  it('builds short links regardless of how INVITE_BASE_URL was written', async () => {
+    const { buildInviteUrl } = await import('./invite.service.js')
+    const { env } = await import('../../config/env.js')
+    const original = env.INVITE_BASE_URL
+    const invite = { token: 'tok', shortCode: 'k7mQ2xPzR' }
+    try {
+      for (const base of ['https://app.example', 'https://app.example/', 'https://app.example/invite', 'https://app.example/i']) {
+        ;(env as { INVITE_BASE_URL: string }).INVITE_BASE_URL = base
+        expect(buildInviteUrl(invite)).toBe('https://app.example/i/k7mQ2xPzR')
+        expect(buildInviteUrl({ token: 'tok', shortCode: null })).toBe('https://app.example/invite/tok')
+      }
+    } finally {
+      ;(env as { INVITE_BASE_URL: string }).INVITE_BASE_URL = original
+    }
+  })
+})

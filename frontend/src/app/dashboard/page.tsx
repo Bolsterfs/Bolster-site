@@ -275,7 +275,8 @@ function InviteCard({ invite, onRevoked }: { invite: Invite; onRevoked: () => vo
   const expires  = new Date(invite.expiresAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 
   function copy() {
-    void navigator.clipboard.writeText(`${window.location.origin}/invite/${invite.token}`).then(() => {
+    const path = invite.shortCode ? `/i/${invite.shortCode}` : `/invite/${invite.token}`
+    void navigator.clipboard.writeText(`${window.location.origin}${path}`).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
     })

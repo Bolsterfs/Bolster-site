@@ -80,6 +80,7 @@ INVITE_SECRET=<fresh secret 3>
 APP_URL=https://app.bolsterfs.co.uk
 API_URL=https://api.bolsterfs.co.uk
 INVITE_BASE_URL=https://app.bolsterfs.co.uk
+# (site root — the backend adds /i/<code> itself; "…/invite" also accepted)
 
 # Stripe — TEST keys, copied from backend/.env (sk_test_… / pk_test_…)
 STRIPE_SECRET_KEY=
@@ -140,9 +141,16 @@ so if you ever change it, trigger a redeploy of the frontend.
 
 ## 5. Domains
 
-For each service: Settings → Networking → **Custom Domain**.
-- backend → `api.bolsterfs.co.uk`
-- frontend → `app.bolsterfs.co.uk`
+For each service: Settings → Networking → **Custom Domain**. Railway asks for the port
+the app listens on — use the port shown in that service's Deploy Logs, NOT the laptop port:
+- backend → `api.bolsterfs.co.uk`, port **3001** (we set `PORT=3001` on the backend)
+- frontend → `app.bolsterfs.co.uk`, port **8080** (Railway injects PORT; Next.js logs
+  `Local: http://localhost:8080`). Getting this wrong gives "Application failed to respond";
+  fix by editing the domain row's port — no redeploy needed.
+
+Railway shows TWO records per domain: a CNAME and a `_railway-verify.<name>` TXT record.
+Add both. At one.com the Hostname box takes only the part before `.bolsterfs.co.uk`
+(e.g. `app`, `_railway-verify.app`) — the suffix is added for you.
 
 Railway shows a CNAME target for each. At one.com → DNS for bolsterfs.co.uk, add:
 

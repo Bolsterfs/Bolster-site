@@ -259,6 +259,8 @@ export const adminApi = {
 export interface Invite {
   id:               string
   token:            string
+  /** 9-character share code; null only for invites older than the short-link change */
+  shortCode:        string | null
   /** null for a general invite — the helper picks which bill */
   debtId:           string | null
   creditorName:     string | null
@@ -445,7 +447,7 @@ export const devApi = {
   }),
   /** DEV ONLY — backdates the newest active invite so the expired screen can be tested. */
   expireNewestInvite: () =>
-    apiFetch<{ inviteId: string; token: string }>('/dev/expire-newest-invite', { method: 'POST' }),
+    apiFetch<{ inviteId: string; token: string; inviteUrl: string }>('/dev/expire-newest-invite', { method: 'POST' }),
   /** DEV ONLY — asks Stripe about every pending card payment right now. */
   reconcileStripe: () =>
     apiFetch<{ checked: number; settled: number; expired: number; unknown: number }>(

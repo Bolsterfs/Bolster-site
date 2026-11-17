@@ -148,7 +148,7 @@ export default function DevTools() {
       setMsg(result.error)
       return
     }
-    setInviteUrl(`${window.location.origin}/invite/${result.data.token}`)
+    setInviteUrl(result.data.inviteUrl)
     setMsg('Newest invite is now expired — copy the URL below and open it in a private window')
   }
 
