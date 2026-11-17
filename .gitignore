@@ -42,3 +42,6 @@ drizzle/meta/
 
 # TypeScript
 *.tsbuildinfo
+
+# scratch
+_to_delete/
