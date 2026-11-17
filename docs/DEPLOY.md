@@ -197,7 +197,11 @@ Without this, payments still settle — the reconciliation sweep checks Stripe e
 
 On https the real Veriff sandbox check can round-trip. In the Veriff dashboard set
 the webhook URL to `https://api.bolsterfs.co.uk/webhooks/veriff`. The "Approve my
-identity (test)" button remains available regardless.
+identity (test)" button remains available regardless. `VERIFF_SECRET_KEY` on Railway must be the
+*shared secret key* of the same Veriff integration whose API key is in `VERIFF_API_KEY`; a mismatch
+shows in Deploy Logs as `Veriff webhook signature verification failed` (401) and the user stays
+"pending". (Fixed 17 Nov 2026: the webhook routes previously verified against an empty body, so
+every Veriff/TrueLayer webhook was rejected regardless of key.)
 
 ---
 

@@ -12,12 +12,31 @@ import type { TruelayerWebhookEvent } from '../../types/index.js'
 
 export async function webhookRoutes(app: FastifyInstance) {
 
+  // Every webhook provider signs the raw request bytes, so JSON parsing in this
+  // scope keeps a copy of them on request.rawBody before parsing. This replaces
+  // the `fastify-raw-body` plugin the routes below were written against (it was
+  // never installed, so rawBody was always undefined and every Veriff/TrueLayer
+  // signature check failed with 401). Scoped to /webhooks only.
+  app.addContentTypeParser(
+    'application/json',
+    { parseAs: 'buffer' },
+    (req, body, done) => {
+      const raw = (body as Buffer).toString('utf8')
+      ;(req as unknown as { rawBody: string }).rawBody = raw
+      try {
+        done(null, raw.length ? JSON.parse(raw) : {})
+      } catch (e) {
+        done(e instanceof Error ? e : new Error('Invalid JSON'), undefined)
+      }
+    },
+  )
+
   // ── POST /webhooks/truelayer — payment status updates ────────────────────
   // TrueLayer sends events when payment status changes (settled, failed, etc.)
   // MUST verify signature before processing — reject anything unsigned
   app.post(
     '/truelayer',
-    { config: { rawBody: true } }, // need raw body for signature verification
+    {},
     async (request, reply) => {
       const signature = request.headers['x-tl-signature'] as string | undefined
 
@@ -66,7 +85,7 @@ export async function webhookRoutes(app: FastifyInstance) {
   // Veriff sends decision webhooks after completing identity verification
   app.post(
     '/veriff',
-    { config: { rawBody: true } },
+    {},
     async (request, reply) => {
       const signature = request.headers['x-hmac-signature'] as string | undefined
 
@@ -156,16 +175,8 @@ export async function webhookRoutes(app: FastifyInstance) {
   // applies here and doesn't affect any other route.
   if (env.STRIPE_WEBHOOK_SECRET) {
     await app.register(async function stripeWebhookPlugin(scope) {
-      // Override the JSON parser for this scope only — collect raw bytes
-      // into a Buffer on the request, then parse JSON as normal for the body.
-      scope.addContentTypeParser(
-        'application/json',
-        { parseAs: 'buffer' },
-        (_req, body, done) => {
-          done(null, body)
-        },
-      )
-
+      // The /webhooks parser above keeps the raw bytes on request.rawBody;
+      // Stripe's constructEvent verifies the signature against exactly those.
       scope.post('/stripe', async (request, reply) => {
         const signature = request.headers['stripe-signature'] as string | undefined
 
@@ -173,8 +184,7 @@ export async function webhookRoutes(app: FastifyInstance) {
           return reply.status(400).send({ error: 'Missing stripe-signature header' })
         }
 
-        // body is a raw Buffer thanks to the custom parser above
-        const rawBody = request.body as Buffer
+        const rawBody = (request as unknown as { rawBody?: string }).rawBody ?? ''
 
         let event
         try {

@@ -127,10 +127,12 @@ export class KycService {
       .update(Buffer.from(rawBody, 'utf8'))
       .digest('hex')
 
-    return crypto.timingSafeEqual(
-      Buffer.from(hmac, 'hex'),
-      Buffer.from(signature, 'hex'),
-    )
+    // timingSafeEqual throws on length mismatch — a malformed header must be a
+    // clean "invalid", not a 500.
+    const expected = Buffer.from(hmac, 'hex')
+    const provided = Buffer.from(signature.trim().toLowerCase(), 'hex')
+    if (provided.length !== expected.length) return false
+    return crypto.timingSafeEqual(expected, provided)
   }
 }
 
